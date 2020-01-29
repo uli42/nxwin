@@ -191,6 +191,7 @@ int deltaSaveUndersViewable = 0;
 WindowPtr pWinTile;
 extern int nxagent_depth, nxagent_red, nxagent_white, nxagent_black;
 extern Bool disable_nomachineLogo;
+Bool paint_nomachineLogo = TRUE;
 #endif
 
 #ifdef DEBUG
@@ -233,6 +234,33 @@ PrintWindowTree()
     }
 }
 #endif
+
+void sendWMDeleteToAllTopLevelWindow()
+{
+  xEvent x;
+  char wm_protocols[] = "WM_PROTOCOLS";
+  char wm_delete_window[] = "WM_DELETE_WINDOW";
+  WindowPtr pWin = WindowTable[0] -> firstChild;
+
+  x.u.u.type = ClientMessage;
+  x.u.u.detail = 32;
+  x.u.clientMessage.u.l.type = MakeAtom(wm_protocols, strlen(wm_protocols), TRUE);
+  x.u.clientMessage.u.l.longs0 = MakeAtom(wm_delete_window, strlen(wm_delete_window), TRUE); 
+        
+  while (pWin)
+  {
+      x.u.clientMessage.window = pWin -> drawable.id;
+
+      TryClientEvents(clients[CLIENT_ID(pWin -> drawable.id)], &x, 1, pWin -> eventMask, NoEventMask, NullGrab);
+      ErrorF("Sending message to client %d of type %d value %d on window %lx\n", 
+                  CLIENT_ID(pWin -> drawable.id), 
+                  x.u.clientMessage.u.l.type,
+                  x.u.clientMessage.u.l.longs0, 
+                  pWin -> drawable.id);
+
+      pWin = pWin -> nextSib;
+  }
+}
 
 int
 TraverseTree(pWin, func, data)
@@ -412,7 +440,6 @@ void nomachineLogo(GCPtr pG, WindowPtr pW)
 #endif
 
       ValidateGC((DrawablePtr)pW->background.pixmap, pG);
-      fprintf(stderr,"validate\n");
               (*pG->ops->FillPolygon)((DrawablePtr)pW->background.pixmap, pG,
                                       Convex, CoordModeOrigin, 4, rect);
 
@@ -545,7 +572,13 @@ MakeRootTile(pWin)
    (*pGC->ops->PutImage)((DrawablePtr)pWin->background.pixmap, pGC, 1,
 		    0, 0, len, 4, 0, XYBitmap, (char *)back);
 #else
-   nomachineLogo(pGC, pWin);
+   ErrorF("nomachineLogo: 1\n");
+   if(paint_nomachineLogo)
+   {
+   ErrorF("nomachineLogo: 2\n");
+     nomachineLogo(pGC, pWin);
+     paint_nomachineLogo=FALSE;
+   }
 #endif
    FreeScratchGC(pGC);
    /*

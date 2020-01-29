@@ -66,7 +66,7 @@
 #define WINDOW_TITLE_X		"Cygwin/XFree86 X rl"
 #define WIN_WINDOW_PROP		"cyg_window_prop_rl"
 #define WIN_MSG_QUEUE_FNAME	"/dev/windows"
-#define WIN_LOG_FNAME		"/tmp/XWinrl.log"
+#define WIN_LOG_FNAME		"/tmp/NXWin.log"
 #define WIN_WID_PROP		"cyg_wid_prop_rl"
 #define WIN_NEEDMANAGE_PROP	"cyg_override_redirect_prop_rl"
 

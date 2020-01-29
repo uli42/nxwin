@@ -631,6 +631,7 @@ ProcCreateWindow(client)
     int len;
 
     REQUEST_AT_LEAST_SIZE(xCreateWindowReq);
+
     
     LEGAL_NEW_RESOURCE(stuff->wid, client);
     if (!(pParent = (WindowPtr)SecurityLookupWindow(stuff->parent, client,
@@ -659,6 +660,8 @@ ProcCreateWindow(client)
 	    return BadAlloc;
 	pWin->eventMask = mask;
     }
+
+    
     if (client->noClientException != Success)
         return(client->noClientException);
     else
@@ -814,6 +817,8 @@ ProcMapWindow(client)
     register ClientPtr client;
 {
     register WindowPtr pWin;
+    register WindowPtr pParent;
+    extern int nxagent_black;
     REQUEST(xResourceReq);
 
     REQUEST_SIZE_MATCH(xResourceReq);
@@ -823,6 +828,17 @@ ProcMapWindow(client)
         return(BadWindow);
     MapWindow(pWin, client);
            /* update cache to say it is mapped */
+
+    pParent=pWin->parent;
+
+    if(!pParent->parent)
+    {
+ 	   pParent->backgroundState = BackgroundPixel;
+           pParent->background.pixel = nxagent_black;
+           (*(pParent->drawable.pScreen)->ChangeWindowAttributes)(pParent,CWBackPixel|CWBorderPixel|CWCursor|CWBackingStore);
+           (*(pParent->drawable.pScreen)->ClearToBackground)(pParent, 0, 0, pParent->drawable.width, pParent->drawable.height, 0);
+    }
+
     return(client->noClientException);
 }
 
@@ -882,7 +898,6 @@ ProcConfigureWindow(client)
 {
     register WindowPtr pWin;
     register WindowPtr pParent;
-    extern int nxagent_black;
     REQUEST(xConfigureWindowReq);
     register int result;
     int len;
@@ -906,14 +921,6 @@ ProcConfigureWindow(client)
 		    stuff[1].mask);
 #endif
 
-    if(!pParent->parent)
-    {
- 	   pParent->backgroundState = BackgroundPixel;
-           pParent->background.pixel = nxagent_black;
-           (*(pParent->drawable.pScreen)->ChangeWindowAttributes)(pParent,CWBackPixel|CWBorderPixel|CWCursor|CWBackingStore);
-           (*(pParent->drawable.pScreen)->ClearToBackground)(pParent, 0, 0, pParent->drawable.width, pParent->drawable.height, 0);
-    }
-    
     result =  ConfigureWindow(pWin, (Mask)stuff->mask, (XID *) &stuff[1], 
 			      client);
     if (client->noClientException != Success)

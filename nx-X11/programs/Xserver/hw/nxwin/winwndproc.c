@@ -67,6 +67,9 @@ extern UINT setDisplay;
 extern char nxDisplay[300];
 extern unsigned int currentProxyPid;
 static HWND     hwndLastPrivates = NULL;
+extern UINT stored_nxserver_version;
+extern BOOL isToShowMessageBox;
+extern char nxwinWinName[80];
 void showNXWin();
 #endif
 
@@ -188,6 +191,12 @@ if(message == valKillESD)
    return 1; 
 
  }  
+if(message == stored_nxserver_version)
+ {
+    isToShowMessageBox = (BOOL)lParam; 
+
+    return 1;
+ }
 
  if(message == valNxMessage)
  {
@@ -213,12 +222,31 @@ if(message == valKillESD)
     {
     /* FIXME: perhaps we don't need this case*/
     case WM_NXSHOW:
+    {
 #if CYGDEBUG
       ErrorF ("winWindowProc - WM_SHOWWINDOW\n");
 #endif
+      int w,h,Width,Height;
+      RECT rect;
+
+      GetWindowRect(hwnd , &rect);
+
+      // Calculate the width and height of the NXWin.
+      Width =  rect.right - rect.left;
+      Height = rect.bottom - rect.top;
+
       SetForegroundWindow(hwnd);
+
+      w = GetSystemMetrics(SM_CXFULLSCREEN);
+      h = GetSystemMetrics(SM_CYFULLSCREEN);
+
+       if(Width < w && Height<h)
+          SetWindowPos(hwnd , NULL,(w-Width)/2,(h-Height)/2,70,70,SWP_NOSIZE );
+
       ShowWindow(hwnd , SW_SHOWDEFAULT);
       return 0;
+} 
+
     case WM_CREATE:
 	{
 #ifdef NXWIN_CLIPBOARD
@@ -1204,27 +1232,40 @@ if(message == valKillESD)
      char title[200]={"NX - "};
      char appTitle[200];
      extern int nClients;
-     char seps[]= ":"; 
-     char textMsg[500]; 
-     memset(textMsg , '\0',sizeof(textMsg)); 
-     char display[100];  
-     int x,y;
-
+     char seps[]= ":";
+     char textMsg[500];
+     memset(textMsg , '\0',sizeof(textMsg));
+     char display[100];
+     int x,y; 
+     extern int nClients;
+     extern void sendWMDeleteToAllTopLevelWindow();
+    if(!isToShowMessageBox)
+    {
      if (nClients > 0)
      {
-        ShowCursor (TRUE);
-        //GetWindowText(hwnd , appTitle , 200 );
+       ShowCursor (TRUE); 
+      strcat(title , nxwinWinName);
+      strcat(title , nxDisplay);
 
-        strcat(title , nxwinMsg);
-        strcat(title , nxDisplay);
-
-        if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
+      if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
            title, MB_OKCANCEL|MB_ICONQUESTION|MB_DEFBUTTON1|MB_TOPMOST))
         {
            ShowCursor (FALSE);
            return 0;
         }
-        killProcess();
+      
+      GiveUp (0);
+      killProcess();
+      return 0;
+     }
+    }
+    else
+    { 
+     if (nClients > 0)
+     {
+        sendWMDeleteToAllTopLevelWindow();
+
+        return 0;
 #if CYGDEBUG
         ErrorF("winwndproc:WM_CLOSE\n");
 #endif
@@ -1232,8 +1273,10 @@ if(message == valKillESD)
 #endif
 
       GiveUp (0);
+      killProcess();
       return 0;
      }
+    }
 #ifdef NXWIN_CLIPBOARD
     case WM_DESTROYCLIPBOARD:
         {

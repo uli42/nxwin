@@ -1,5 +1,27 @@
 ChangeLog:
 
+nxwin-1.3.2-3-DAR1
+
+- Now when get the WM_CLOSE, send to all top level
+  windows the wm_protocols WM_DELETE client message.
+
+nxwin-1.3.2-3 
+
+- Fixed the bug in code resetting logo when the first
+  window is mapped. In previous version the background
+  was reset when the first window was configured, now
+  we wait for the first window being mapped. 
+
+nxwin-1.3.2-2
+
+- NX logo is showed only once.
+
+nxwin-1.3.2-1
+
+- Log file renamed to NXWin.log.
+
+- Opened the 1.3.2 branch.
+
 nxwin-1.3.1-4
 
 - Corrected typos in the ChangeLog.

@@ -74,7 +74,8 @@
   UINT setDisplay     =0; 
   char nxDisplay[300];  
   unsigned int currentProxyPid=-1;
-
+  UINT stored_nxserver_version = 0; 
+  BOOL isToShowMessageBox = FALSE;
 #endif
 
 #ifdef NXWIN_LOGO
@@ -642,7 +643,7 @@ winFinishScreenInitFB (int index,
   storedProxyPid = RegisterWindowMessage("NX_STORED_PROXY_PID"); 
   isProxyRunning = RegisterWindowMessage("NX_IS_RUNNING_PROXY");
   setDisplay     = RegisterWindowMessage("NX_SET_DISPLAY");    
-  
+  stored_nxserver_version = RegisterWindowMessage("STORED_NXSERVER_VERSION"); 
 
   if(valNxKill == 0 || valConnected == 0 || valNxMessage == 0 || valKillESD == 0){
         ErrorF ("winFinishScreenInitFB () - failed to register message NXKILL\n");
