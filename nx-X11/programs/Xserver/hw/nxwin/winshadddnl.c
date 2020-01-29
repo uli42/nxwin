@@ -97,13 +97,47 @@ winCreatePrimarySurfaceShadowDDNL (ScreenPtr pScreen)
 				       &ddsd,
 				       &pScreenPriv->pddsPrimary4,
 				       NULL);
+  pScreenPriv->fRetryCreateSurface = FALSE;
   if (FAILED (ddrval))
     {
-      ErrorF ("winCreatePrimarySurfaceShadowDDNL - Could not create primary "
-	      "surface: %08x\n",
-	      ddrval);
+      if (ddrval == DDERR_NOEXCLUSIVEMODE ||
+              ddrval == DDERR_UNSUPPORTEDMODE)
+      {
+        pScreenPriv->iRetryAttempt++;
+
+        /*
+         * If the CreateSurface keeps failing, stop
+         * after 50 attemps (more or less 5 seconds,
+         * because after each failed attempt there
+         * is a 100 ms sleep).
+         */
+
+        if (pScreenPriv->iRetryAttempt < 50)
+        {
+          pScreenPriv->fRetryCreateSurface = TRUE;
+
+          ErrorF ("winCreatePrimarySurfaceShadowDDNL - Could not create primary "
+	          "surface: %08x. Will retry later.\n",
+	          ddrval);
+        }
+        else
+        {
+          ErrorF ("winCreatePrimarySurfaceShadowDDNL - Could not create primary "
+	          "surface: %08x. Stop retrying.\n",
+	          ddrval);
+        }
+      }
+      else
+      {
+        ErrorF ("winCreatePrimarySurfaceShadowDDNL - Could not create primary "
+	        "surface: %08x\n",
+	        ddrval);
+      }
+
       return FALSE;
     }
+
+  pScreenPriv->iRetryAttempt = 0;
   
 #if 1
   ErrorF ("winCreatePrimarySurfaceShadowDDNL - Created primary surface\n");
@@ -933,6 +967,26 @@ winBltExposedRegionsShadowDDNL (ScreenPtr pScreen)
   HRESULT		ddrval = DD_OK;
   Bool			fReturn = TRUE;
   int			i;
+
+  /*
+   * In some cases retry to create the surface. If it
+   * fails again, skip the blt.
+   */
+
+  if (pScreenPriv->pddsPrimary4 == NULL && pScreenPriv->fRetryCreateSurface &&
+          !winCreatePrimarySurfaceShadowDDNL(pScreen))
+  {
+    Sleep(100);
+
+    return FALSE;
+  }
+
+  if (pScreenPriv->pddsPrimary4 == NULL)
+  {
+    ErrorF("winBltExposedRegionsShadowDDNL - Surface not available, skip Blt.\n");
+
+    return FALSE;
+  }
 
   /* BeginPaint gives us an hdc that clips to the invalidated region */
   hdcUpdate = BeginPaint (pScreenPriv->hwndScreen, &ps);

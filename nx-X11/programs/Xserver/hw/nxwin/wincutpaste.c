@@ -218,14 +218,15 @@ void nxwinSetSelectionOwner(Selection *pSelection)
 */
 }
 
-Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Window requestor, Atom property, Atom target, Time time)
+Bool nxwinConvertSelection(ClientPtr client, WindowPtr pWin, Atom selection,
+                               Window requestor, Atom property, Atom target, Time time)
 {
    if (!nxwinClipboardStatus)
      return 0;
 
-#ifdef NXWIN_CLIPBOARD_DEBUG
+   #ifdef NXWIN_CLIPBOARD_DEBUG
    ErrorF("ConvertSelection\n");
-#endif
+   #endif
 
    if (!windowsOwner) /* there is a X client owner, let normal stuff happens */
        return 0;
@@ -256,9 +257,9 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
       return 1;
    }
 
-#ifdef NXWIN_CLIPBOARD_DEBUG
+   #ifdef NXWIN_CLIPBOARD_DEBUG
    ErrorF("ConvertSelection converting...\n");
-#endif
+   #endif
 
    if ((target == clientTEXT) ||
            (target == XA_STRING) ||
@@ -295,6 +296,12 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
       }
       pszGlobalData = (char *) GlobalLock (hGlobal);
 
+      #ifdef NXWIN_CLIPBOARD_DEBUG
+      ErrorF("Converting selection for client [%p] with window [%p] "
+                 "target [%d] clipboard data [%p].\n", client, pWin,
+                     target, pszGlobalData);
+      #endif
+
       if (target == clientUTF8_STRING)
       {
         int bytesNeeded;
@@ -305,11 +312,45 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
                                               pszGlobalData2, 0, NULL, NULL) + 1;
   
         hGlobal2 = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, bytesNeeded);
+
+        if (hGlobal2 == NULL)
+        {
+          ErrorF("nxwinConvertSelection: WARNING! Memory allocation failed with error %d.\n",
+                     GetLastError());
+        }
+
         pszGlobalData2 = GlobalLock(hGlobal2);
   
+
+        #ifdef NXWIN_CLIPBOARD_DEBUG
+        ErrorF("UTF8 conversion needs [%d] bytes allocated on [%p] and locked on [%p].\n",
+                   bytesNeeded, hGlobal2, pszGlobalData2);
+        #endif
+
         /* Convert Unicode text to UTF8 */
         WideCharToMultiByte(CP_UTF8, 0, (WCHAR *) pszGlobalData, -1, pszGlobalData2,
                                 bytesNeeded, NULL, NULL);
+
+        if (pszGlobalData2 == NULL)
+        {
+          ErrorF("nxwinConvertSelection: WARNING! Unicode conversion failed with error %d.\n",
+                     GetLastError());
+
+          pszGlobalData2 = pszGlobalData;
+
+          GlobalUnlock(hGlobal2);
+          GlobalFree(hGlobal2);
+
+          hGlobal2 = NULL;
+        }
+
+        #ifdef NXWIN_CLIPBOARD_DEBUG
+        ErrorF("Converted UTF8 string in [%p].\n", pszGlobalData2);
+        #endif
+
+        #ifdef NXWIN_CLIPBOARD_DEBUG
+        ErrorF("Converting selection string from DOS to UNIX\n");
+        #endif
 
         /* Convert DOS string to UNIX string */
         DOStoUNIX (pszGlobalData2, strlen (pszGlobalData2));
@@ -323,10 +364,18 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
                              strlen(pszGlobalData2),
                              pszGlobalData2, 1);
 
-        GlobalUnlock (hGlobal2);
+        if (hGlobal2 != NULL)
+        {
+          GlobalUnlock(hGlobal2);
+          GlobalFree(hGlobal2);
+        }
       }
-      else
+      else if (pszGlobalData != NULL)
       {
+        #ifdef NXWIN_CLIPBOARD_DEBUG
+        ErrorF("Converting selection string from DOS to UNIX\n");
+        #endif
+
         /* Convert DOS string to UNIX string */
         DOStoUNIX (pszGlobalData, strlen (pszGlobalData));
 
@@ -352,9 +401,10 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
       x.u.selectionNotify.target = target;
       x.u.selectionNotify.property = property;
       (void) TryClientEvents(client, &x, 1, NoEventMask,
-                             NoEventMask , NullGrab);
+                             NoEventMask, NullGrab);
       return 1;
    }
+
    return 0;
 }
 

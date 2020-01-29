@@ -1,5 +1,15 @@
 ChangeLog:
 
+nxwin-3.5.0-2
+
+- Fixed TR06I02469 and TR06I02482. After converting the UTF8 text free
+  the memory allocated with GlobalAlloc() in order to avoid exhausting
+  the heap space.
+
+- When a shadow DDNL surface update is required but the previous sur-
+  face creation failed with an unsupported or a not exclusive mode er-
+  rors, try again to create the surface before failing. 
+
 nxwin-3.5.0-1
 
 - Opened the 3.5.0 branch based on nxwin-3.4.0-7.

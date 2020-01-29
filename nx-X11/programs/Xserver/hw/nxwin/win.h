@@ -499,6 +499,8 @@ typedef struct _winPrivScreenRec
   LPDIRECTDRAW4		pdd4;
   LPDIRECTDRAWSURFACE4	pddsShadow4;
   LPDIRECTDRAWSURFACE4	pddsPrimary4;
+  Bool			fRetryCreateSurface;
+  int 			iRetryAttempt;
 
   /* Privates used by both shadow fb DirectDraw servers */
   LPDIRECTDRAWCLIPPER	pddcPrimary;
