@@ -98,10 +98,20 @@ winAllocateFBPrimaryDD (ScreenPtr pScreen)
   if (pScreenInfo->fFullScreen)
     {
       /* Full screen mode */
+
+      /*
+       * We don't want the session window is minimized
+       * when it is deactivated.
+       */
+/*
       ddrval = IDirectDraw2_SetCooperativeLevel (pScreenPriv->pdd2,
 						 pScreenPriv->hwndScreen,
 						 DDSCL_FULLSCREEN
 						 | DDSCL_EXCLUSIVE);
+*/
+      ddrval = IDirectDraw2_SetCooperativeLevel (pScreenPriv->pdd2,
+                                                 pScreenPriv->hwndScreen,
+                                                 DDSCL_NORMAL);
       if (FAILED (ddrval))
 	FatalError ("winAllocateFBPrimaryDD - Could not set "
 		    "cooperative level\n");

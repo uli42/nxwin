@@ -78,6 +78,7 @@ winKeyboardMessageHookLL (int iCode, WPARAM wParam, LPARAM lParam)
 {
   BOOL			fPassKeystroke = FALSE;
   BOOL			fPassAltTab = TRUE;
+  BOOL                  fPassEsc = TRUE;
   PKBDLLHOOKSTRUCT	p = (PKBDLLHOOKSTRUCT) lParam;
   HWND			hwnd = GetActiveWindow(); 
 #ifdef XWIN_MULTIWINDOW
@@ -97,7 +98,10 @@ winKeyboardMessageHookLL (int iCode, WPARAM wParam, LPARAM lParam)
       pScreenInfo	= pScreenPriv->pScreenInfo;
 
       if (pScreenInfo->fMultiWindow)
+        {
           fPassAltTab = FALSE;
+          fPassEsc    = FALSE;
+        }
     }
 #endif
 
@@ -115,6 +119,9 @@ winKeyboardMessageHookLL (int iCode, WPARAM wParam, LPARAM lParam)
 	  fPassKeystroke = 
 	    (fPassAltTab && 
                 (p->vkCode == VK_TAB) && ((p->flags & LLKHF_ALTDOWN) != 0))
+            || (fPassEsc &&
+                (p->vkCode == VK_ESCAPE) &&
+                ((p->flags & LLKHF_ALTDOWN) != 0 || (GetKeyState(VK_CONTROL) & 0x8000)))
 	    || (p->vkCode == VK_LWIN) || (p->vkCode == VK_RWIN)
             || (p->vkCode == VK_SNAPSHOT) || ((p->vkCode == VK_SNAPSHOT) && ((p->flags & LLKHF_ALTDOWN) != 0))
 	    ;
@@ -146,6 +153,17 @@ winKeyboardMessageHookLL (int iCode, WPARAM wParam, LPARAM lParam)
       ErrorF("winKeyboardMessageHookLL: p->vkCode [0x%x].\n", p->vkCode);
       ErrorF("winKeyboardMessageHookLL: lParamKey [0x%x].\n", lParamKey);
       /* #endif */
+
+      /*
+       * Prevent the system from sending us WM_KILLFOCUS message
+       * for Alt-Tab, Alt-Esc and Ctrl-Esc key combinations.
+       */
+
+      if (wParam == WM_SYSKEYUP &&
+              (p->vkCode == VK_TAB || p->vkCode == VK_ESCAPE))
+      {
+        wParam = WM_KEYUP;
+      }
 
       /* Send message to our main window that has the keyboard focus */
       PostMessage (hwnd,

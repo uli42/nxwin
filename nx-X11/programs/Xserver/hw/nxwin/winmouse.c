@@ -199,6 +199,21 @@ winMouseButtonsSendEvent (int iEventType, int iButton)
 {
   xEvent		xCurrentEvent;
 
+  /*
+   * Capture mouse events.
+   * BUTTONUP message will be received even if the button
+   * is going to be released outside the session window.
+   */
+
+  if (iEventType == ButtonPress)
+  {
+    SetCapture(GetActiveWindow());
+  }
+  else if (iEventType == ButtonRelease)
+  {
+    ReleaseCapture();
+  }
+
   /* Load an xEvent and enqueue the event */
   xCurrentEvent.u.u.type = iEventType;
   xCurrentEvent.u.u.detail = iButton;

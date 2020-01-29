@@ -250,11 +250,19 @@ winAllocateFBShadowDD (ScreenPtr pScreen)
       DWORD		dwRefreshRateCurrent = 0;
       HDC		hdc = NULL;
 
-      /* Set the cooperative level to full screen */
+      /*
+       * We don't want the session window is minimized
+       * when it is deactivated.
+       */
+/*
       ddrval = IDirectDraw2_SetCooperativeLevel (pScreenPriv->pdd2,
 						 pScreenPriv->hwndScreen,
 						 DDSCL_EXCLUSIVE
 						 | DDSCL_FULLSCREEN);
+*/
+      ddrval = IDirectDraw2_SetCooperativeLevel (pScreenPriv->pdd2,
+                                                 pScreenPriv->hwndScreen,
+                                                 DDSCL_NORMAL);
       if (FAILED (ddrval))
 	{
 	  ErrorF ("winAllocateFBShadowDD - Could not set "

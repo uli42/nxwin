@@ -174,6 +174,11 @@ extern MultStackQueuePtr pMultStackQueue;
 Selection *CurrentSelections;
 int NumCurrentSelections;
 
+#ifdef NXWIN_CLIPBOARD
+int nxwinUpdateClipboard = 0;
+int nxwinButtonDown = 0;
+#endif
+
 static ClientPtr grabClient;
 #define GrabNone 0
 #define GrabActive 1
@@ -604,6 +609,16 @@ Dispatch()
 #ifdef NXWIN_MULTIWINDOW
         if (nxwinMultiwindow) {
           nxwinWMMultStackWindow();
+        }
+#endif
+
+#ifdef NXWIN_CLIPBOARD
+        if (nxwinUpdateClipboard && !nxwinButtonDown)
+        {
+          extern void nxwinRequestSelection();
+          nxwinRequestSelection();
+
+          nxwinUpdateClipboard = 0;
         }
 #endif
 

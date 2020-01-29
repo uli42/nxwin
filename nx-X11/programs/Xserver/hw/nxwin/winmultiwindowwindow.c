@@ -63,6 +63,10 @@ extern pthread_mutex_t nxwinMultStackMutex;
 
 extern int nxwinSetWindowTrap;
 
+#ifdef NXWIN_CLIPBOARD
+extern int nxwinButtonDown;
+#endif
+
 extern MultStackQueuePtr pMultStackQueue;
 
 /*
@@ -1010,11 +1014,17 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
     case WM_LBUTTONDOWN:
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	break;
+#ifdef NXWIN_CLIPBOARD
+      nxwinButtonDown = 1;
+#endif
       return winMouseButtonsHandle (s_pScreen, ButtonPress, Button1, wParam);
 
     case WM_LBUTTONUP:
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	break;
+#ifdef NXWIN_CLIPBOARD
+      nxwinButtonDown = 0;
+#endif
       return winMouseButtonsHandle (s_pScreen, ButtonRelease, Button1, wParam);
 
     case WM_MBUTTONDBLCLK:

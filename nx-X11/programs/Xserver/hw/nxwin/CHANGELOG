@@ -1,5 +1,44 @@
 ChangeLog:
 
+nxwin-3.2.0-4
+
+- Fixed TR08E01848. Changed the handling of windows clipboard. This
+  fix provides a solution also for TR08E01839.
+
+- Corrected scancode-to-keycode translation for the Multi_key and the
+  Menu key.
+
+- Made changes in order to avoid the session window is minimized if it
+  is deactivated when running in fullscreen mode.
+
+- Added a system call to avoid the cursor is clipped inside the screen
+  containing the session window when running in fullscreen mode in a
+  dual-screen environment.
+
+- Fixed TR06F02071. Made UTF8_STRING target available when converting
+  selections.
+
+nxwin-3.2.0-3
+
+- Fixed TR08E01832. In fullscreen mode Alt-Tab and other key combina-
+  tions were not properly grabbed when '-keyhook' option was on. 
+
+nxwin-3.2.0-2
+
+- Reverted changes dealing with TR08E01839. It has been reported that
+  such changes could break clipboard function. Rolling back while
+  investigation is going on.
+
+nxwin-3.2.0-1
+
+- Opened the 3.2.0 branch based on nxwin-3.1.0-4.
+
+nxwin-3.1.0-4
+
+- Fixed TR10E01911. In rootless mode ButtonRelease events were not
+  received if the mouse button was released outside the NX session
+  window.
+
 nxwin-3.1.0-3
 
 - Fixed TR06D01395. In rootless mode it could happen that dialogs did

@@ -131,7 +131,7 @@ winCreateBoundingWindowFullScreen (ScreenPtr pScreen)
 
   /* Create the window */
   /* Store current Focus */
-  *phwnd = CreateWindowExA (WS_EX_TOPMOST,	/* Extended styles */
+  *phwnd = CreateWindowExA (0,                  /* Extended styles */
 			    WINDOW_CLASS,	/* Class name */
 			    WINDOW_TITLE,	/* Window name */
 			    (WS_POPUPWINDOW & ~WS_BORDER)

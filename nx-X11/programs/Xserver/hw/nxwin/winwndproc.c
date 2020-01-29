@@ -76,6 +76,10 @@ Ctrl+Alt+K again to enable this option.\
 extern void nxwinShowCursor(void);
 extern void nxwinHideCursor(void);
 
+#ifdef NXWIN_CLIPBOARD
+extern int nxwinButtonDown;
+#endif
+
 #if defined(NXWIN_PONG) || defined(NXWIN_EXIT)
 extern Bool nxagentWas;
 extern UINT valPingPong;
@@ -836,7 +840,6 @@ if(message == valKillESD)
       /* Only paint if we have privates and the server is enabled */
       if (s_pScreenPriv == NULL
 	  || !s_pScreenPriv->fEnabled
-	  || (s_pScreenInfo->fFullScreen && !s_pScreenPriv->fActive)
 	  || s_pScreenPriv->fBadDepth)
 	{
 	  /* We don't want to paint */
@@ -914,6 +917,13 @@ if(message == valKillESD)
 	  if (!(*g_fpTrackMouseEvent) (&tme))
 	    ErrorF ("winWindowProc - _TrackMouseEvent failed\n");
 
+          /*
+           * Avoid the cursor is clipped inside the screen containing a
+           * fullscreen session window when running in dual-screen mode.
+           */
+
+          ClipCursor(NULL);
+
 	  /* Flag that we are tracking now */
 	  s_fTracking = TRUE;
 	}
@@ -987,6 +997,9 @@ if(message == valKillESD)
 
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	        break;
+#ifdef NXWIN_CLIPBOARD
+      nxwinButtonDown = 1;
+#endif
       if (s_pScreenInfo->fRootless) SetCapture (hwnd);
       if(s_pScreenInfo->fFullScreen)
       {
@@ -1008,6 +1021,9 @@ if(message == valKillESD)
     case WM_LBUTTONUP:
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	break;
+#ifdef NXWIN_CLIPBOARD
+      nxwinButtonDown = 0;
+#endif
       if (s_pScreenInfo->fRootless) ReleaseCapture ();
       return winMouseButtonsHandle (s_pScreen, ButtonRelease, Button1, wParam);
 
@@ -1110,7 +1126,7 @@ if(message == valKillESD)
       /* Release any pressed keys */
       winKeybdReleaseKeys ();
       
-      extern void nxwinLostFocus(); 
+      extern void nxwinLostFocus();
       nxwinLostFocus();
 
       /* Remove our keyboard hook if it is installed */
@@ -1371,7 +1387,14 @@ if(message == valKillESD)
 	}
 
       /* Call engine specific screen activation/deactivation function */
-      (*s_pScreenPriv->pwinActivateApp) (s_pScreen);
+
+      /*
+       * This call would cause the session window is minimized
+       * when it is deactivated.
+       */
+/*
+      (s_pScreenPriv->pwinActivateApp) (s_pScreen);
+*/
       return 0;
 
     case WM_CLOSE:
@@ -1429,15 +1452,14 @@ if(message == valKillESD)
     case WM_DESTROYCLIPBOARD:
         {
         /*
-         * nxwinClearSelection() is already called after
-         * the system clipboard is cleared.
+         * nxwinClearSelection() is called every time
+         * the session window loses focus.
          */
-
-        /*
+/*
 	extern void nxwinClearSelection(void);
 	        nxwinClearSelection();
 		return 0;
-        */
+*/
 	}
 #endif
     #ifdef ALLOC_CONSOLE_DEBUG

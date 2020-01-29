@@ -84,6 +84,8 @@ extern int      NumCurrentSelections;
 static Bool     nxwinSelection = FALSE;
 extern Bool     nxwinMultiwindow;
 
+extern int      nxwinUpdateClipboard;
+
 int             nxwinClipboardStatus;
 
 HWND            lastHwnd;
@@ -94,6 +96,7 @@ WindowPtr       lastOwnerWindowPtr;
 
 Atom            clientTARGETS;
 Atom            clientTEXT;
+Atom            clientUTF8_STRING;
 Atom            clientCutProperty;
 Atom            clientCLIPBOARD;
 
@@ -153,6 +156,7 @@ void nxwinInitSelection(HWND hwnd)
    lastHwnd = hwnd;
    clientTARGETS        = MakeAtom("TARGETS", strlen("TARGETS"), TRUE);
    clientTEXT           = MakeAtom("TEXT", strlen("TEXT"), TRUE);
+   clientUTF8_STRING    = MakeAtom("UTF8_STRING", strlen("UTF8_STRING"), TRUE);
    clientCutProperty    = MakeAtom("NX_CUT_BUFFER_CLIENT", strlen("NX_CUT_BUFFER_CLIENT"), TRUE);
    clientCLIPBOARD      = MakeAtom("CLIPBOARD", strlen("CLIPBOARD"), TRUE);
    nxwinClipboardStatus = TRUE;
@@ -175,16 +179,14 @@ void nxwinSetSelectionOwner(Selection *pSelection)
    
    nxwinSelection = TRUE;
 
-   /*
-    * Clear system clipboard.
-    */
-
    if (OpenClipboard(lastHwnd))
    {
+     windowsOwner = FALSE;
      EmptyClipboard();
      CloseClipboard();
    }
 
+   nxwinUpdateClipboard = 1;
 /*
     if (pSelection->selection == XA_PRIMARY)
     {
@@ -227,14 +229,18 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
 
    if (target == clientTARGETS)
    {
-      Atom xa_STRING = XA_STRING;
+      Atom xa_STRING[2];
       xEvent x;
+
+      xa_STRING[0] = XA_STRING;
+      xa_STRING[1] = clientUTF8_STRING;
+
       ChangeWindowProperty(pWin,
                            property,
                            target,
                            sizeof(Atom)*8,
                            PropModeReplace,
-                           1,
+                           2,
                            &xa_STRING, 1);
 
       x.u.u.type = SelectionNotify;
@@ -251,7 +257,9 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
    ErrorF("ConvertSelection converting...\n");
 #endif
 
-   if ((target == clientTEXT) || (target == XA_STRING))
+   if ((target == clientTEXT) ||
+           (target == XA_STRING) ||
+               (target == clientUTF8_STRING))
    {
       HGLOBAL hGlobal;
       char *pszGlobalData;
@@ -260,7 +268,15 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
       /* Access the clipboard */
       if (!OpenClipboard (lastHwnd)) return 0;
 
-      hGlobal = GetClipboardData (CF_TEXT);
+      if (target == clientUTF8_STRING)
+      {
+        hGlobal = GetClipboardData (CF_UNICODETEXT);
+      }
+      else
+      {
+        hGlobal = GetClipboardData (CF_TEXT);
+      }
+
       if (!hGlobal)
       {
         CloseClipboard();
@@ -276,17 +292,50 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
       }
       pszGlobalData = (char *) GlobalLock (hGlobal);
 
-      /* Convert DOS string to UNIX string */
-      DOStoUNIX (pszGlobalData, strlen (pszGlobalData));
+      if (target == clientUTF8_STRING)
+      {
+        int bytesNeeded;
+        HGLOBAL hGlobal2;
+        char *pszGlobalData2 = NULL;
 
-      /* Copy the clipboard text to the requesting window */
-      ChangeWindowProperty(pWin,
-                           property,
-                           target,
-                           8,
-                           PropModeReplace,
-                           strlen(pszGlobalData),
-                           pszGlobalData, 1);
+        bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, (WCHAR *) pszGlobalData, -1,
+                                              pszGlobalData2, 0, NULL, NULL) + 1;
+  
+        hGlobal2 = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, bytesNeeded);
+        pszGlobalData2 = GlobalLock(hGlobal2);
+  
+        /* Convert Unicode text to UTF8 */
+        WideCharToMultiByte(CP_UTF8, 0, (WCHAR *) pszGlobalData, -1, pszGlobalData2,
+                                bytesNeeded, NULL, NULL);
+
+        /* Convert DOS string to UNIX string */
+        DOStoUNIX (pszGlobalData2, strlen (pszGlobalData2));
+
+        /* Copy the clipboard text to the requesting window */
+        ChangeWindowProperty(pWin,
+                             property,
+                             target,
+                             8,
+                             PropModeReplace,
+                             strlen(pszGlobalData2),
+                             pszGlobalData2, 1);
+
+        GlobalUnlock (hGlobal2);
+      }
+      else
+      {
+        /* Convert DOS string to UNIX string */
+        DOStoUNIX (pszGlobalData, strlen (pszGlobalData));
+
+        /* Copy the clipboard text to the requesting window */
+        ChangeWindowProperty(pWin,
+                             property,
+                             target,
+                             8,
+                             PropModeReplace,
+                             strlen(pszGlobalData),
+                             pszGlobalData, 1);
+      }
 
       /* Release the clipboard data */
       GlobalUnlock (hGlobal);
@@ -500,7 +549,7 @@ Bool nxwinSendNotify(xEvent* x)
           nxwinSetWindowClipboard(pszReturnData, ulReturnItems);
 
           clientOwner = TRUE;
-          nxwinClearSelection();
+          /* nxwinClearSelection(); */
 
           return TRUE;
         }
@@ -509,17 +558,39 @@ Bool nxwinSendNotify(xEvent* x)
   return FALSE;
 }
 
+void nxwinRequestSelection(void)
+{
+  if (lastOwnerWindowPtr)
+  {
+    xEvent x;
+
+    x.u.u.type = SelectionRequest;
+    x.u.selectionRequest.time = GetTimeInMillis();
+    x.u.selectionRequest.owner = lastOwnerWindow;
+    x.u.selectionRequest.requestor = WindowTable[0]->drawable.id;
+    x.u.selectionRequest.selection = XA_PRIMARY;
+    x.u.selectionRequest.target = XA_STRING;
+    x.u.selectionRequest.property = clientCutProperty;
+
+    (void) TryClientEvents (lastOwnerClientPtr, &x, 1,
+                                NoEventMask, NoEventMask /* CantBeFiltered */,
+                                NullGrab);
+    SetCriticalOutputPending();
+  }
+}
+
 void nxwinGotFocus(wParam)
-{ 
+{
   if (nxwinMultiwindow == 0 || wParam == 0 || nxwinSelection == 0)
   {
     nxwinClearSelection();
     SetCriticalOutputPending();
-  } 
+  }
 }
 
 void nxwinLostFocus(void)
 {
+#if 0
    if (lastOwnerWindowPtr)
    {
       xEvent x;
@@ -537,6 +608,7 @@ void nxwinLostFocus(void)
                                NullGrab);
       SetCriticalOutputPending();
    }
+#endif
 }
 
 WindowPtr FindSelectionOwner(Atom selection)
