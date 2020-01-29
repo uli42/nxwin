@@ -1,5 +1,8 @@
 ChangeLog:
 
+nxwin-1.4.0-3-DAR1
+
+- Corrected a bug in the clipboard initialization.
 
 nxwin-1.4.0-3
 

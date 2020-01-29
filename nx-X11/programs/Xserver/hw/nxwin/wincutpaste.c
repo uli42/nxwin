@@ -140,10 +140,10 @@ void nxwinClearSelection(void)
 void nxwinInitSelection(HWND hwnd)
 {
    lastHwnd = hwnd;
-   clientTARGETS        = MakeAtom("TARGETS", sizeof("TARGETS"), TRUE);
-   clientTEXT           = MakeAtom("TEXT", sizeof("TEXT"), TRUE);
-   clientCutProperty    = MakeAtom("NX_CUT_BUFFER_CLIENT", sizeof("NX_CUT_BUFFER_CLIENT"), TRUE);
-   clientCLIPBOARD      = MakeAtom("CLIPBOARD", sizeof("CLIPBOARD"), TRUE);
+   clientTARGETS        = MakeAtom("TARGETS", strlen("TARGETS"), TRUE);
+   clientTEXT           = MakeAtom("TEXT", strlen("TEXT"), TRUE);
+   clientCutProperty    = MakeAtom("NX_CUT_BUFFER_CLIENT", strlen("NX_CUT_BUFFER_CLIENT"), TRUE);
+   clientCLIPBOARD      = MakeAtom("CLIPBOARD", strlen("CLIPBOARD"), TRUE);
    nxwinClipboardStatus = TRUE;
    windowsOwner         = TRUE;
 /*   nxwinSetWindowClipboard(" ");*/
