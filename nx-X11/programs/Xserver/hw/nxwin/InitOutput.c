@@ -272,7 +272,7 @@ OsVendorInit (void)
 {
 
   /* Using our rgb.txt instead of default one */
-  rgbPath = xstrdup ("/mnt/NX/fonts/rgb");
+  /* rgbPath = xstrdup ("/mnt/NX/fonts/rgb"); */
 
 #ifdef DDXOSVERRORF
   if (!OsVendorVErrorFProc)

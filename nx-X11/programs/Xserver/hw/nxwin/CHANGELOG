@@ -1,5 +1,10 @@
 ChangeLog:
 
+nxwin-1.5.0-2
+
+- Removed the hardcoded value "/mnt/NX/fonts/rgb". It was overwriting
+  the value passed as a command line parameter ("-co").
+
 nxwin-1.5.0-1
 
 - Opened the 1.5.0 branch.
