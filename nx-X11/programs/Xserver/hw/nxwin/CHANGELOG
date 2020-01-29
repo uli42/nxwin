@@ -1,5 +1,10 @@
 ChangeLog:
 
+nxwin-1.5.0-8
+
+- Fixed TR08C00970. Check if the data field of the property structure
+  is NULL before trying to retrive the data.
+
 nxwin-1.5.0-7
 
 - Merged patch from Cygwin/XFree86 to stop printing the 

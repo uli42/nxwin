@@ -153,9 +153,10 @@ GetWindowRole (WindowPtr pWin, char **res_role)
   *res_role = NULL;
   while (prop)
     {
-      if (prop->propertyName == atmWmWindowRole
-	  && prop->type == XA_STRING
-	  && prop->format == 8)
+      if (prop->data
+          && prop->propertyName == atmWmWindowRole
+          && prop->type == XA_STRING
+          && prop->format == 8)
 	{
 	  len_role= strlen ((char *) prop->data);
 
