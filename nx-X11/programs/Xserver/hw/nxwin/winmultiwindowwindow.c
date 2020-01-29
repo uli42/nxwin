@@ -867,6 +867,9 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
      case WM_KILLFOCUS:
      {
        extern  void nxwinLostFocus();
+
+       winKeybdReleaseKeys();
+
        nxwinLostFocus();
        return 0;
      }
@@ -1712,7 +1715,7 @@ winScaleXBitmapToWindows (int iconSize,
   if (pixmap->drawable.bitsPerPixel == 15)
     effXBPP = 16;
   else
-    effXBPP = pixmap->drawable.bitsPerPixel;
+    effXBPP = BitsPerPixel(pixmap -> drawable.depth);
   
   if (pixmap->drawable.depth == 15)
     effXDepth = 16;

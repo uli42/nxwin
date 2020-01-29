@@ -56,6 +56,23 @@
 #include <commctrl.h>
 */
 
+
+#define DIALOG_ENABLE_KEYSTROKES_MESSAGE \
+\
+"\
+Now the system keystrokes are catched\n\
+by the NX application. You can press\n\
+Ctrl+Alt+K again to disable this option.\
+"
+
+#define DIALOG_DISABLE_KEYSTROKES_MESSAGE \
+\
+"\
+The system keystrokes are not catched\n\
+anymore by the NX application. Press\n\
+Ctrl+Alt+K again to enable this option.\
+"
+
 extern void nxwinShowCursor(void);
 extern void nxwinHideCursor(void);
 
@@ -74,7 +91,9 @@ extern UINT stored_nxserver_version;
 extern BOOL isToShowMessageBox;
 extern char nxwinWinName[80];
 void showNXWin();
-extern UINT valNxAdminCommand; 
+extern UINT valNxAdminCommand;
+
+Bool g_fKeyboardHookLL = TRUE;
 
 int nxwinCursorShown = 0;
 
@@ -1068,6 +1087,13 @@ if(message == stored_nxserver_version)
 
       /* Restore the state of all mode keys */
       winRestoreModeKeyStates (s_pScreen);
+
+      /* Add the keyboard hook if possible */
+      if (g_fKeyboardHookLL == TRUE)
+      {
+        g_fKeyboardHookLL = winInstallKeyboardHookLL();
+      }
+
       return 0;
 
     case WM_KILLFOCUS:
@@ -1080,8 +1106,12 @@ if(message == stored_nxserver_version)
       /* Release any pressed keys */
       winKeybdReleaseKeys ();
       
-     extern  void nxwinLostFocus(); 
+      extern void nxwinLostFocus(); 
       nxwinLostFocus();
+
+      /* Remove our keyboard hook if it is installed */
+      winRemoveKeyboardHookLL();
+
       return 0;
 
 #if WIN_NEW_KEYBOARD_SUPPORT
@@ -1127,6 +1157,52 @@ if(message == stored_nxserver_version)
         return 0;
       }
 
+      if (wParam == 0x4D &&
+              s_pScreenInfo->fMultiWindow == FALSE &&
+                  (GetKeyState(VK_CONTROL) & 0x8000) &&
+                      (GetKeyState(VK_MENU) & 0x8000))
+      {
+        ShowWindow(hwnd, SW_MINIMIZE);
+
+        return 0;
+      }
+
+      if (wParam == 0x4B &&
+              s_pScreenInfo -> fMultiWindow == FALSE &&
+                  (GetKeyState(VK_CONTROL) & 0x8000) &&
+                      (GetKeyState(VK_MENU) & 0x8000))
+      {
+         char title[200] = {"NX - "};
+
+         strcat(title, nxwinWinName);
+         strcat(title, nxDisplay);
+
+         if (g_fKeyboardHookLL == TRUE)
+         {
+
+           winRemoveKeyboardHookLL();
+
+           g_fKeyboardHookLL = FALSE;
+
+           MessageBox(hwnd, DIALOG_DISABLE_KEYSTROKES_MESSAGE,
+                          title, MB_OK | MB_TOPMOST | MB_ICONEXCLAMATION);
+
+         }
+         else if (g_fKeyboardHookLL == FALSE)
+         {
+
+            g_fKeyboardHookLL = winInstallKeyboardHookLL ();
+
+
+            MessageBox(hwnd, DIALOG_ENABLE_KEYSTROKES_MESSAGE,
+                           title, MB_OK | MB_TOPMOST |  MB_ICONEXCLAMATION);
+
+         }
+
+         return 0;
+      }
+
+
       /*
        * FIXME: Catching Alt-F4 like this is really terrible.  This should
        * be generalized to handle other Windows keyboard signals.  Actually,
@@ -1159,7 +1235,7 @@ if(message == stored_nxserver_version)
        * be returned to Windows.  We may be able to trap the Windows keys,
        * but we should determine if that is desirable before doing so.
        */
-      if (wParam == VK_LWIN || wParam == VK_RWIN)
+      if (wParam == VK_LWIN || wParam == VK_RWIN  && !g_fKeyboardHookLL)
 	break;
 
       /* Discard fake Ctrl_L presses that precede AltGR on non-US keyboards */
@@ -1194,7 +1270,7 @@ if(message == stored_nxserver_version)
        * be returned to Windows.  We may be able to trap the Windows keys,
        * but we should determine if that is desirable before doing so.
        */
-      if (wParam == VK_LWIN || wParam == VK_RWIN)
+      if (wParam == VK_LWIN || wParam == VK_RWIN && !g_fKeyboardHookLL)
 	break;
 
       /* Ignore the fake Ctrl_L that follows an AltGr release */

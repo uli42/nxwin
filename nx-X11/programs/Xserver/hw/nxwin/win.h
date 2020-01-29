@@ -929,6 +929,16 @@ winKeybdReleaseKeys ();
 void
 winSendKeyEvent (DWORD dwKey, Bool fDown);
 
+/*
+ * Keyboard hook
+ */
+
+Bool
+winInstallKeyboardHookLL (void);
+
+void
+winRemoveKeyboardHookLL (void);
+
 #if WIN_NEW_KEYBOARD_SUPPORT
 void
 winProcessKeyEvent (DWORD dwVirtKey, DWORD dwKeyData);

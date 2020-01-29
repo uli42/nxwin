@@ -1,5 +1,17 @@
 ChangeLog:
 
+nxwin-2.1.0-3
+
+- Fixed TR08C00956. Now when scaling XBitmap To Windows we use the
+  result of BitsPerPixel() macro instead of value stored in the drawa-
+  ble structure.
+
+- When a window receives a KILLFOCUS message any pressed keys are rel-
+  eased in multiwindow mode too.
+
+- Fixed TR11D01562. Now with Ctrl+Alt+K it's possible to enable/disa-
+  ble the Alt+Tab and Print key hooks in NXWin.
+
 nxwin-2.1.0-2
 
 - Changed the LICENSE file to state that the software is only made

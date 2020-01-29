@@ -41,6 +41,7 @@ SRCS =	winclass.c \
 	winshadddnl.c \
 	winpfbdd.c \
 	winkeybd.c \
+        winkeyhook.c \
 	winmouse.c \
 	wincutpaste.c \
 	winnativegdi.c \
@@ -93,6 +94,7 @@ OBJS =	winclass.o \
 	winshadddnl.o \
 	winpfbdd.o \
 	winkeybd.o \
+        winkeyhook.o \
 	winmouse.o \
 	wincutpaste.o \
 	winnativegdi.o \

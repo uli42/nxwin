@@ -350,6 +350,10 @@ ddxGiveUp()
       g_fpTrackMouseEvent = (FARPROC) (void (*)())NoopDDA;
     }
 
+  /* Remove our keyboard hook if it is installed */
+  winRemoveKeyboardHookLL();
+
+
   /* Tell Windows that we want to end the app */
   PostQuitMessage (0);
 }
