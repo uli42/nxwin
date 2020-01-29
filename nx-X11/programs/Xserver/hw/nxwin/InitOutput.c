@@ -30,7 +30,7 @@ from The Open Group.
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -48,6 +48,10 @@ from The Open Group.
 #include "win.h"
 #include "winconfig.h"
 
+#define PANIC
+#define WARNING
+#define TEST
+#define DEBUG
 
 /*
  * General global variables
@@ -94,6 +98,92 @@ FARPROC		g_fpTrackMouseEvent = (FARPROC) (void (*)())NoopDDA;
 void OsVendorVErrorF (const char *pszFormat, va_list va_args);
 #endif
 
+/*
+ * Override the default log file and make
+ * it configurable at run time, based on
+ * the NX_TEMP environment.
+ */
+
+static void nxwinOpenLogFile()
+{
+  const char *tempEnv = (char *) getenv("NX_TEMP");
+
+  char *logPath = NULL;
+
+  if (g_pfLog != NULL)
+  {
+    return;
+  }
+
+  if (tempEnv != NULL && *tempEnv != '\0')
+  {
+    logPath = (char *) xalloc(strlen(tempEnv) + strlen("/winlog") + 1);
+
+    if (logPath == NULL)
+    {
+      #ifdef PANIC
+      FatalError("nxwinOpenLogFile: PANIC! Out of memory handling file name [%s].\n", logPath);
+      #endif
+    }
+
+    sprintf(logPath, "%s/winlog", tempEnv);
+
+    /*
+     * The following is global.
+     */
+
+    g_pfLog = fopen(logPath, "w");
+  }
+  else
+  {
+    g_pfLog = fopen(WIN_LOG_FNAME, "w");
+  }
+
+  if (g_pfLog == NULL)
+  {
+    #ifdef PANIC
+    FatalError("nxwinOpenLogFile: PANIC! Couldn't open the log file [%s].\n", logPath);
+    #endif
+  }
+
+  /*
+   * Set stderr to point to our log file.
+   */
+
+  stderr = g_pfLog;
+
+  #ifdef TEST
+  fprintf(stderr, "nxwinOpenLogFile: Redirected the standard error to the log file.\n");
+  #endif
+
+  /*
+   * Print the following messages here because
+   * the ErrorF() output may be lost before the
+   * log file is open.
+   */
+
+  #ifdef TEST
+
+  if (tempEnv != NULL && *tempEnv != '\0')
+  {
+    fprintf(stderr, "nxwinOpenLogFile: NX_TEMP is set to [%s].\n", tempEnv);
+
+    fprintf(stderr, "nxwinOpenLogFile: Using log file [%s].\n", logPath);
+  }
+  else
+  {
+    fprintf(stderr, "nxwinOpenLogFile: NX_TEMP is not set.\n");
+
+    fprintf(stderr, "nxwinOpenLogFile: Using log file [%s].\n", WIN_LOG_FNAME);
+  }
+
+  #endif
+
+  if (logPath != NULL)
+  {
+    xfree(logPath);
+  }
+}
 
 /*
  * For the depth 24 pixmap we default to 32 bits per pixel, but
@@ -134,6 +224,10 @@ char nxwinMsg[300];
 Bool nxwinHideStart = FALSE;
 
 const int NUMFORMATS = sizeof (g_PixmapFormats) / sizeof (g_PixmapFormats[0]);
+
+/*
+ * These are some utility function used by the real interface function below.
+ */
 
 
 void
@@ -185,7 +279,7 @@ winInitializeDefaultScreens (void)
       g_ScreenInfo[i].fClipboard = FALSE;
       g_ScreenInfo[i].fLessPointer = FALSE;
       g_ScreenInfo[i].fScrollbars = FALSE;
-      g_ScreenInfo[i].iE3BTimeout = WIN_E3B_OFF;
+      g_ScreenInfo[i].iE3BTimeout = WIN_DEFAULT_E3B_TIME;
       g_ScreenInfo[i].dwWidth_mm = (dwWidth / WIN_DEFAULT_DPI)
 	* 25.4;
       g_ScreenInfo[i].dwHeight_mm = (dwHeight / WIN_DEFAULT_DPI)
@@ -224,11 +318,16 @@ ddxGiveUp()
   /* Close the log file handle */
   if (g_pfLog != NULL)
     {
-      /* Close log file */
-      fclose (g_pfLog);
-
-      /* Set the file handle to invalid */
-      g_pfLog = NULL;
+      /*
+       * It is not a good idea to close the
+       * log file as other parts of the code
+       * may need to print some log during
+       * shutdown.
+       *
+       * fclose (g_pfLog);
+       *
+       * g_pfLog = NULL;
+       */
     }
 
   /*
@@ -270,17 +369,15 @@ AbortDDX (void)
 void
 OsVendorInit (void)
 {
-
-  /* Using our rgb.txt instead of default one */
-  /* rgbPath = xstrdup ("/mnt/NX/fonts/rgb"); */
-
 #ifdef DDXOSVERRORF
   if (!OsVendorVErrorFProc)
     OsVendorVErrorFProc = OsVendorVErrorF;
 
   /* Open log file if not yet open */
   if (g_pfLog == NULL)
-    g_pfLog = fopen (WIN_LOG_FNAME, "w");
+  {
+    nxwinOpenLogFile();
+  }
 #endif
 
   /* Add a default screen if no screens were specified */
@@ -434,7 +531,9 @@ ddxProcessArgument (int argc, char *argv[], int i)
 
       /* Open log file if not yet open */
       if (g_pfLog == NULL)
-	g_pfLog = fopen (WIN_LOG_FNAME, "w");
+      {
+        nxwinOpenLogFile();
+      }
 #endif
 
       s_fBeenHere = TRUE;

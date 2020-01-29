@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -74,11 +74,15 @@
 #undef CreateWindow
 #undef FreeResource
 
+#define MaxSelections 2
+
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 extern          WindowPtr *WindowTable;
 extern          Selection *CurrentSelections;
 extern int      NumCurrentSelections;
 static Bool     nxwinSelection = FALSE;
+extern Bool     nxwinMultiwindow;
 
 int             nxwinClipboardStatus;
 
@@ -118,18 +122,12 @@ void nxwinClearSelection(void)
    ErrorF("ClearSelection\n");
 #endif
 
-   i = 0;
-   while ((i < NumCurrentSelections) &&
-           CurrentSelections[i].selection != XA_PRIMARY) i++;
-
-   if (i == NumCurrentSelections)
-   {
-      return;
-   }
+for (i = 0; i < MIN(MaxSelections, NumCurrentSelections); i++)
+{
    x.u.u.type = SelectionClear;
    x.u.selectionClear.time = GetTimeInMillis();
    x.u.selectionClear.window = CurrentSelections[i].window;
-   x.u.selectionClear.atom = XA_PRIMARY;
+   x.u.selectionClear.atom = CurrentSelections[i].selection;
 
    if (CurrentSelections[i].client != NULL)
    {
@@ -144,6 +142,8 @@ void nxwinClearSelection(void)
    }
 
    CurrentSelections[i].client = NullClient;
+}
+
    windowsOwner = TRUE;
    nxwinSelection = FALSE;
 }
@@ -201,7 +201,6 @@ void nxwinSetSelectionOwner(Selection *pSelection)
      }
 */
 }
-
 
 Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Window requestor, Atom property, Atom target, Time time)
 {
@@ -277,6 +276,7 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
                            PropModeReplace,
                            strlen(pszGlobalData),
                            pszGlobalData, 1);
+
       /* Release the clipboard data */
       GlobalUnlock (hGlobal);
       pszGlobalData = NULL;
@@ -294,8 +294,6 @@ Bool nxwinConvertSelection(ClientPtr client ,WindowPtr pWin, Atom selection, Win
    }
    return 0;
 }
-
-
 
 /*
  * Change \n to \r\n.  Reallocate string if necessary.
@@ -502,29 +500,12 @@ Bool nxwinSendNotify(xEvent* x)
 
 void nxwinGotFocus(wParam)
 { 
-  extern Bool nxwinMultiwindow;
-
-  if (nxwinMultiwindow == TRUE)
-  {
-    if(!wParam)
-    { 
-      nxwinClearSelection();
-      FlushAllOutput();
-    }
-    else if(nxwinSelection == FALSE)
-    {
-      nxwinClearSelection();
-      FlushAllOutput();
-    }
-  } 
-  else
+  if (nxwinMultiwindow == 0 || wParam == 0 || nxwinSelection == 0)
   {
     nxwinClearSelection();
-    FlushAllOutput();
-  }  
+    SetCriticalOutputPending();
+  } 
 }
-
-
 
 void nxwinLostFocus(void)
 {
@@ -543,7 +524,7 @@ void nxwinLostFocus(void)
       (void) TryClientEvents (lastOwnerClientPtr, &x, 1,
                                NoEventMask, NoEventMask /* CantBeFiltered */,
                                NullGrab);
-      FlushAllOutput();
+      SetCriticalOutputPending();
    }
 }
 

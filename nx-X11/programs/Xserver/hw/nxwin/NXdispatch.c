@@ -72,7 +72,7 @@ SOFTWARE.
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -91,6 +91,8 @@ SOFTWARE.
 #include <stdio.h>
 int ProcInitialConnection();
 #endif
+
+#include "NXwin.h"
 
 #include "windowstr.h"
 #include "fontstruct.h"
@@ -278,6 +280,34 @@ InitSelections()
 	xfree(CurrentSelections);
     CurrentSelections = (Selection *)NULL;
     NumCurrentSelections = 0;
+
+#ifdef NXWIN_CLIPBOARD
+    { 
+      Selection *newsels;
+      newsels = (Selection *)xalloc(2 * sizeof(Selection));
+
+      if(!newsels)
+      {
+        return;
+      }
+
+      NumCurrentSelections += 2;
+      CurrentSelections = newsels;
+
+      CurrentSelections[0].selection = MakeAtom("PRIMARY", 7, 1);
+      CurrentSelections[0].lastTimeChanged = ClientTimeToServerTime(0);
+      CurrentSelections[0].window = WindowTable[0]->drawable.id;
+      CurrentSelections[0].pWin = NULL;
+      CurrentSelections[0].client = NullClient;
+ 
+      CurrentSelections[1].selection = MakeAtom("CLIPBOARD", 9, 1);
+      CurrentSelections[1].lastTimeChanged = ClientTimeToServerTime(0);
+      CurrentSelections[1].window = WindowTable[0]->drawable.id;
+      CurrentSelections[1].pWin = NULL;
+      CurrentSelections[1].client = NullClient;
+    }
+#endif
+
 }
 
 void 
@@ -606,6 +636,29 @@ Dispatch()
 	}
 	dispatchException &= ~DE_PRIORITYCHANGE;
     }
+
+    /*
+     * It seems that there are still memory errors
+     * in the deinitialization phase, probably due
+     * to a double free or such. The code base is
+     * going to move forward to the X.org tree so
+     * there is not a pressing need to investigate
+     * the problem. Therefore we exit at dispatch
+     * loop termination without going through the
+     * normal close down procedure.
+     */
+
+    ErrorF("Dispatch: Exiting from the dispatcher with exception [%d].\n",
+               dispatchException);
+
+    /*
+     * Remove listening sockets before exiting.
+     */ 
+
+    CloseWellKnownConnections();
+
+    exit(0);
+
     KillAllClients();
     DEALLOCATE_LOCAL(clientReady);
     dispatchException &= ~DE_RESET;
@@ -1213,6 +1266,7 @@ ProcSetSelectionOwner(client)
 #ifdef NXWIN_CLIPBOARD
 	{
 		extern void nxwinSetSelectionOwner(Selection *);
+
 		nxwinSetSelectionOwner(&CurrentSelections[i]);
 	}
 #endif

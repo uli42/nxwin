@@ -72,7 +72,7 @@ SOFTWARE.
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -86,6 +86,8 @@ SOFTWARE.
 /* All rights reserved.                                                   */
 /*                                                                        */
 /**************************************************************************/
+
+#include "win.h"
 
 #include "X.h"
 #include "misc.h"
@@ -126,6 +128,16 @@ extern Bool XkbFilterEvents();
 #include "dixevents.h"
 #include "dixgrabs.h"
 #include "../../dix/dispatch.h"
+
+#ifdef NXWIN_MULTIWINDOW
+#include "servermd.h"
+
+extern Bool nxwinMultiwindow;
+#endif
+
+static CursorPtr blankCursor = NULL;
+
+extern int nxwinCursorShown;
 
 extern WindowPtr *WindowTable;
 
@@ -624,6 +636,128 @@ XineramaChangeToCursor(CursorPtr cursor)
 
 #endif  /* PANORAMIX */
 
+
+static void createBlankCursor(void)
+{
+
+  unsigned char *srcbits, *mskbits;
+  XID cursorID = 0;
+  CursorMetricRec cm;
+
+  #ifdef TEST
+  fprintf(stderr, "createBlankCursor: Creating blank cursor.\n");
+  #endif
+
+  cm.width = 16;
+  cm.height = 16;
+  cm.xhot = 8;
+  cm.yhot = 8;
+
+  srcbits = (unsigned char *) xalloc(BitmapBytePad(32) * 16);
+  mskbits = (unsigned char *) xalloc(BitmapBytePad(32) * 16);
+
+  if (srcbits == NULL || mskbits == NULL)
+  {
+
+    xfree(srcbits);
+    xfree(mskbits);
+
+    blankCursor = NULL;
+  }
+  else
+  {
+
+    memset(srcbits, 0, BitmapBytePad(32) * 16);
+    memset(mskbits, 0, BitmapBytePad(32) * 16);
+
+    blankCursor = AllocCursor(srcbits, mskbits, &cm, 0, 0, 0, 0, 0, 0);
+
+    if (blankCursor != NULL)
+    {
+      cursorID = FakeClientID(0);
+
+      if (!AddResource(cursorID, RT_CURSOR, (pointer) blankCursor))
+      {
+
+        xfree(srcbits);
+        xfree(mskbits);
+        xfree(blankCursor);
+        blankCursor = NULL;
+      }
+    }
+    else
+    {
+
+      xfree(srcbits);
+      xfree(mskbits);
+    }
+
+    #ifdef TEST
+    fprintf(stderr, "createBlankCursor: Allocated resource with ID [%ld].\n",
+                cursorID);
+    #endif
+
+  }
+
+  return;
+}
+
+#ifdef NXWIN_MULTIWINDOW
+
+static void nxwinHideRootWindowPointer(void)
+{
+
+  ScreenPtr pScreen;
+  WindowPtr pWin;
+
+  #ifdef TEST
+  fprintf(stderr, "nxwinHideRootWindowPointer: Hiding Root Window Pointer.\n");
+  #endif
+
+  pWin = WindowTable[0];
+  pScreen = pWin -> drawable.pScreen;
+
+  if (blankCursor == NULL)
+  {
+
+    #ifdef TEST
+    fprintf(stderr, "nxwinHideRootWindowPointer: Creating blank cursor.\n");
+    #endif
+
+    createBlankCursor();
+
+  }
+
+  pWin -> optional -> cursor = blankCursor;
+
+  (*pScreen -> ChangeWindowAttributes)(pWin, CWCursor);
+
+  return;
+}
+
+static void nxwinShowRootWindowPointer(void)
+{
+
+  ScreenPtr pScreen;
+  WindowPtr pWin;
+
+  pWin = WindowTable[0];
+
+  pScreen = pWin -> drawable.pScreen;
+
+  pWin -> optional -> cursor = rootCursor;
+
+  #ifdef TEST
+  fprintf(stderr, "nxwinShowRootWindowPointer: Showing Root Window Pointer.\n");
+  #endif
+
+  (*pScreen -> ChangeWindowAttributes)(pWin, CWCursor);
+
+  return;
+}
+
+#endif
+
 static Mask
 GetNextEventMask()
 {
@@ -879,23 +1013,51 @@ ChangeToCursor(cursor)
     CursorPtr cursor;
 #endif
 {
-#ifdef PANORAMIX
-    if(!noPanoramiXExtension) {
-	XineramaChangeToCursor(cursor);
-	return;
+ 
+#ifdef NXWIN_MULTIWINDOW
+  if (!nxwinMultiwindow)
+  {
+#endif 
+    if (nxwinCursorShown == 0)
+    {
+      #ifdef TEST
+      ErrorF("ChangeToCursor: nxwinCursorShown [%d].\n", nxwinCursorShown);
+      ErrorF("ChangeToCursor: Cursor not changed.\n");
+      #endif
+
+      return;
     }
+#ifdef NXWIN_MULTIWINDOW
+  }
+#endif
+  
+
+#ifdef PANORAMIX
+  if (!noPanoramiXExtension)
+  {
+    XineramaChangeToCursor(cursor);
+    return;
+  }
 #endif
 
-    if (cursor != sprite.current)
+  if (cursor != sprite.current)
+  {
+    if ((sprite.current->bits->xhot != cursor->bits->xhot) ||
+            (sprite.current->bits->yhot != cursor->bits->yhot))
     {
-	if ((sprite.current->bits->xhot != cursor->bits->xhot) ||
-		(sprite.current->bits->yhot != cursor->bits->yhot))
-	    CheckPhysLimits(cursor, FALSE, sprite.confined,
-			    (ScreenPtr)NULL);
-	(*sprite.hotPhys.pScreen->DisplayCursor) (sprite.hotPhys.pScreen,
-						  cursor);
-	sprite.current = cursor;
+      CheckPhysLimits(cursor, FALSE, sprite.confined, (ScreenPtr)NULL);
     }
+
+    (*sprite.hotPhys.pScreen->DisplayCursor) (sprite.hotPhys.pScreen, cursor);
+
+    sprite.current = cursor;
+  }
+
+  #ifdef TEST
+  ErrorF("ChangeToCursor: sprite.current [%p].\n", sprite.current);
+  ErrorF("ChangeToCursor: blankCursor    [%p].\n", blankCursor);
+  #endif
+
 }
 
 /* returns true if b is a descendent of a */
@@ -966,6 +1128,59 @@ GetSpritePosition(px, py)
 {
     *px = sprite.hotPhys.x;
     *py = sprite.hotPhys.y;
+}
+
+void nxwinHideCursor(void)
+{
+
+  #ifdef TEST
+  ErrorF("nxwinHideCursor: Entered.\n\n");
+  #endif
+
+  if (blankCursor == NULL)
+  {
+
+    #ifdef TEST
+    fprintf(stderr, "nxwinHideCursor: Creating blank cursor.\n");
+    #endif
+
+    createBlankCursor();
+  }
+
+  ChangeToCursor(blankCursor);
+
+  return;
+
+}
+
+void nxwinShowCursor()
+{
+  int x,y;
+  WindowPtr pWin;
+
+  #ifdef TEST
+  ErrorF("nxwinShowCursor(): Entered.\n");
+  #endif
+
+  miPointerPosition(&x, &y);
+
+  pWin = XYToWindow(x, y);
+
+  while (pWin  && (pWin -> optional == NULL || pWin -> optional -> cursor == NULL))
+  {
+    if (pWin -> parent)
+    {
+      pWin = pWin -> parent;
+    }
+  }
+
+ if (pWin && pWin -> optional && pWin -> optional -> cursor)
+ {
+   ChangeToCursor(pWin -> optional -> cursor);
+ }
+
+ return;
+
 }
 
 #define TIMESLOP (5 * 60 * 1000) /* 5 minutes */
@@ -3297,6 +3512,13 @@ EnterNotifies(ancestor, child, mode, detail)
 {
     WindowPtr	parent = child->parent;
 
+    #ifdef NXWIN_MULTIWINDOW
+    if (nxwinMultiwindow == 1)
+    {
+      nxwinShowRootWindowPointer();
+    }
+    #endif
+
     if (ancestor == parent)
 	return;
     EnterNotifies(ancestor, parent, mode, detail);
@@ -3316,6 +3538,17 @@ LeaveNotifies(child, ancestor, mode, detail)
 
     if (ancestor == child)
 	return;
+
+    #ifdef NXWIN_MULTIWINDOW
+    if (nxwinMultiwindow == 1)
+    {
+      if (ancestor == WindowTable[0])
+      {
+        nxwinHideRootWindowPointer();
+      }
+    }
+    #endif
+
     for (pWin = child->parent; pWin != ancestor; pWin = pWin->parent)
     {
 	EnterLeaveEvent(LeaveNotify, mode, detail, pWin, child->drawable.id);

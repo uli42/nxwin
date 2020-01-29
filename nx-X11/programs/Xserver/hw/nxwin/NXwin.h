@@ -1,6 +1,6 @@
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -15,23 +15,27 @@
 /*                                                                        */
 /**************************************************************************/
 
-#include "win.h"
-#include "inputstr.h"
+/*
+ * When the NX_TRANS_SOCKET is defined we use the _XSelect() function 
+ * instead of the select() (see the Xpoll.h file for details). To avoid
+ * this and preserve the independence of the NXWin (which doens't need the
+ * Xtransport) from the X11 libs we use the following stub.
+ */
 
-ClientPtr winGetClientPriv(WindowPtr pWin)
+#include <sys/select.h>
+
+int _XSelect(int maxfds, fd_set *readfds, fd_set *writefds,
+                 fd_set *exceptfds, struct timeval *timeout)
 {
-#if CYGMULTIWINDOW_DEBUG
-	ErrorF("Client is %p--pWin is %p\n",winGetWindowPriv(pWin)->client,winGetWindowPriv(pWin));
-#endif
-	return winGetWindowPriv(pWin)->client;
-}
-unsigned winGetOverrideRedirectPriv(WindowPtr pWin)
-{
-	return pWin->overrideRedirect;
+    return select(maxfds, readfds, writefds, exceptfds, timeout);
 }
 
-DeviceIntPtr winGetinputInfokeyboard()
-{
-	return inputInfo.keyboard;
-}
+
+/*
+ * The NXWin doesn't need the following variable (used by the Popen()
+ * function defined in the libos), so we can declare it here to
+ * preserve the independence of the NXWin from the X11 libs.
+ */
+
+int _NXUnsetLibraryPath;
 

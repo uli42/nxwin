@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -56,6 +56,9 @@
 #include <commctrl.h>
 */
 
+extern void nxwinShowCursor(void);
+extern void nxwinHideCursor(void);
+
 #if defined(NXWIN_PONG) || defined(NXWIN_EXIT)
 extern Bool nxagentWas;
 extern UINT valPingPong;
@@ -72,6 +75,8 @@ extern BOOL isToShowMessageBox;
 extern char nxwinWinName[80];
 void showNXWin();
 extern UINT valNxAdminCommand; 
+
+int nxwinCursorShown = 0;
 
 char * convertLongToAscii(unsigned long val)
 { 
@@ -854,6 +859,13 @@ if(message == stored_nxserver_version)
       }
 
     case WM_MOUSEMOVE:
+
+      if (nxwinCursorShown == 0)
+      {
+        nxwinCursorShown = 1;
+        nxwinShowCursor();
+      }
+
       /* We can't do anything without privates */
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	break;
@@ -928,6 +940,9 @@ if(message == stored_nxserver_version)
 
     case WM_MOUSELEAVE:
       /* Mouse has left our client area */
+
+      nxwinHideCursor();
+      nxwinCursorShown = 0;
 
       /* Flag that we are no longer tracking */
       s_fTracking = FALSE;

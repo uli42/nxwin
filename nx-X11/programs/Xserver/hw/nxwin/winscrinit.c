@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2003 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
 /* NXPROXY, NX protocol compression and NX extensions to this software    */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -181,6 +181,9 @@ winScreenInit (int index,
 	      "failed\n");
       return FALSE;
     }
+
+  fprintf(stderr, "Info: Display running with pid '%lu' and handler '0x%lx'.\n",
+              (long unsigned) getpid(), (long unsigned) pScreenPriv-> hwndScreen);
 
   /* Get a device context */
   hdc = GetDC (pScreenPriv->hwndScreen);
