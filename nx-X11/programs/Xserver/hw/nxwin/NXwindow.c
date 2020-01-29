@@ -249,14 +249,20 @@ void sendWMDeleteToAllTopLevelWindow()
         
   while (pWin)
   {
-      x.u.clientMessage.window = pWin -> drawable.id;
+      if (pWin -> viewable && !pWin -> overrideRedirect)
+      {
+        x.u.clientMessage.window = pWin -> drawable.id;
 
-      TryClientEvents(clients[CLIENT_ID(pWin -> drawable.id)], &x, 1, pWin -> eventMask, NoEventMask, NullGrab);
-      ErrorF("Sending message to client %d of type %d value %d on window %lx\n", 
-                  CLIENT_ID(pWin -> drawable.id), 
-                  x.u.clientMessage.u.l.type,
-                  x.u.clientMessage.u.l.longs0, 
-                  pWin -> drawable.id);
+        TryClientEvents(clients[CLIENT_ID(pWin -> drawable.id)], &x, 1, pWin -> eventMask, NoEventMask, NullGrab);
+
+        #ifdef DEBUG
+        ErrorF("Sending message to client %d of type %d value %d on window %lx\n", 
+                    CLIENT_ID(pWin -> drawable.id), 
+                    x.u.clientMessage.u.l.type,
+                    x.u.clientMessage.u.l.longs0, 
+                    pWin -> drawable.id);
+        #endif
+      }
 
       pWin = pWin -> nextSib;
   }

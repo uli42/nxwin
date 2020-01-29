@@ -1,5 +1,11 @@
 ChangeLog:
 
+nxwin-1.3.2-5
+
+- Now when get the WM_CLOSE, send the wm_protocols WM_DELETE 
+  client message only to top level windows that are
+  viewable and have not set the override redirect.
+
 nxwin-1.3.2-3-DAR1
 
 - Now when get the WM_CLOSE, send to all top level
