@@ -613,7 +613,7 @@ winIsFakeCtrl_L (UINT message, WPARAM wParam, LPARAM lParam)
    * Fake Ctrl_L presses will be followed by an Alt_R keypress
    * with the same timestamp as the Ctrl_L press.
    */
-  if (message == WM_KEYDOWN
+  if ((message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
       && wParam == VK_CONTROL
       && (HIWORD (lParam) & KF_EXTENDED) == 0)
     {
@@ -621,11 +621,28 @@ winIsFakeCtrl_L (UINT message, WPARAM wParam, LPARAM lParam)
 
       /* Get time of current message */
       lTime = GetMessageTime ();
-      			
+
       /* Look for fake Ctrl_L preceeding an Alt_R press. */
       fReturn = PeekMessage (&msgNext, NULL,
-			     WM_KEYDOWN, WM_KEYDOWN,
+			     WM_KEYDOWN, WM_SYSKEYDOWN,
 			     PM_NOREMOVE);
+
+      /*
+       * Try again if the first call fails.
+       * NOTE: This usually happens when TweakUI is enabled.
+       */
+      if (!fReturn)
+	{
+	  /* Voodoo to make sure that the Alt_R message has posted */
+	  Sleep (0);
+
+	  /* Look for fake Ctrl_L preceeding an Alt_R press. */
+	  fReturn = PeekMessage (&msgNext, NULL,
+				 WM_KEYDOWN, WM_SYSKEYDOWN,
+				 PM_NOREMOVE);
+	}
+      if (msgNext.message != WM_KEYDOWN && msgNext.message != WM_SYSKEYDOWN)
+          fReturn = 0;
 
       /* Is next press an Alt_R with the same timestamp? */
       if (fReturn && msgNext.wParam == VK_MENU
@@ -659,6 +676,24 @@ winIsFakeCtrl_L (UINT message, WPARAM wParam, LPARAM lParam)
 			     WM_KEYUP, WM_SYSKEYUP, 
 			     PM_NOREMOVE);
 
+      /*
+       * Try again if the first call fails.
+       * NOTE: This usually happens when TweakUI is enabled.
+       */
+      if (!fReturn)
+	{
+	  /* Voodoo to make sure that the Alt_R message has posted */
+	  Sleep (0);
+
+	  /* Look for fake Ctrl_L release preceeding an Alt_R release. */
+	  fReturn = PeekMessage (&msgNext, NULL,
+				 WM_KEYUP, WM_SYSKEYUP, 
+				 PM_NOREMOVE);
+	}
+
+      if (msgNext.message != WM_KEYUP && msgNext.message != WM_SYSKEYUP)
+          fReturn = 0;
+      
       /* Is next press an Alt_R with the same timestamp? */
       if (fReturn
 	  && (msgNext.message == WM_KEYUP

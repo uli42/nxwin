@@ -1,5 +1,10 @@
 ChangeLog:
 
+nxwin-2.0.0-14
+
+- Fixed TR09C01029. This solves problems related with non working
+  AltGr key.
+
 nxwin-2.0.0-13
 
 - The third button emulation is activated by default.
