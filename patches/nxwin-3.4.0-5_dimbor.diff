@@ -1,0 +1,2893 @@
+diff -u -P -x '*.[ao]' nxwin.orig/win.h nxwin/win.h
+--- nxwin.orig/win.h	2010-01-29 17:14:15.000000000 +0300
++++ nxwin/win.h	2010-05-28 07:03:54.890625000 +0400
+@@ -1448,8 +1448,9 @@
+ void
+ winUpdateWindowName(WindowPtr pWin);
+ 
++/* by dimbor - changed name and type (unicode)*/
+ void
+-winGetWindowName(void *pWin, char **ppName);
++winGetWindowNameW(void *pWin, wchar_t **ppWName);
+ 
+ /*
+  * winwndproc.c
+diff -u -P -x '*.[ao]' nxwin.orig/wincreatewnd.c nxwin/wincreatewnd.c
+--- nxwin.orig/wincreatewnd.c	2010-01-29 20:13:11.000000000 +0300
++++ nxwin/wincreatewnd.c	2010-06-22 11:02:04.796875000 +0400
+@@ -417,6 +417,13 @@
+       pScreenInfo->dwHeight = rcClient.bottom - rcClient.top;
+     }
+ 
++  /* by dimbor */
++  if (pScreenInfo->fMultiWindow)
++  {
++     pScreenInfo->dwXOffset = rcWorkArea.left;
++     pScreenInfo->dwYOffset = rcWorkArea.top;
++  }
++  
+ #if 0
+   /*
+    * NOTE: For the uninitiated, the page size is the number of pixels
+diff -u -P -x '*.[ao]' nxwin.orig/wincutpaste.c nxwin/wincutpaste.c
+--- nxwin.orig/wincutpaste.c	2010-01-29 17:14:16.000000000 +0300
++++ nxwin/wincutpaste.c	2010-05-27 23:52:34.296875000 +0400
+@@ -115,6 +115,64 @@
+ void UNIXtoDOS (char **ppszData, int iLength);
+ void DOStoUNIX (char *pszSrc, int iLength);
+ 
++/* ------------- cp conversions by dimbor ---------------------------- */
++wchar_t * cp_to_unicode(UINT CP,char *cp_string);
++char * unicode_to_cp(UINT CP,wchar_t *unicode_string);
++char * utf8_to_ansi(char *utf8_string);
++char * ansi_to_utf8(char *ansi_string);
++
++wchar_t * cp_to_unicode(UINT CP,char *cp_string)
++{
++	int res_len = MultiByteToWideChar(CP,0,cp_string,-1,NULL,0);
++	if (res_len == 0)
++		return NULL;
++	wchar_t * res = calloc(sizeof(wchar_t),res_len+1);
++	int err = MultiByteToWideChar(CP,0,cp_string,-1,res,res_len);
++	if (err == 0)
++	{
++		free(res);
++		return NULL;
++	}
++	res[res_len]=0;
++	return res;
++}
++
++char * unicode_to_cp(UINT CP,wchar_t *unicode_string)
++{
++   int res_len = WideCharToMultiByte(CP,0,unicode_string,-1,NULL,0,NULL,NULL);
++	if (res_len == 0)
++		return NULL;
++	char * res = calloc(sizeof(char),res_len+1);
++	int err = WideCharToMultiByte(CP,0,unicode_string,-1,res,res_len,NULL,NULL);
++	if (err == 0)
++	{
++		free(res);
++		return NULL;
++	}
++	res[res_len]=0;
++	return res;
++}
++
++char * utf8_to_ansi(char *utf8_string)
++{
++  wchar_t * unicode_string = cp_to_unicode(CP_UTF8,utf8_string);
++  if (!unicode_string)
++		return NULL;
++  char * res = unicode_to_cp(CP_ACP,unicode_string);
++  free(unicode_string);
++  return res;
++}
++
++char * ansi_to_utf8(char *ansi_string)
++{
++  wchar_t * unicode_string = cp_to_unicode(CP_ACP,ansi_string);
++  if (!unicode_string)
++		return NULL;
++  char * res = unicode_to_cp(CP_UTF8,unicode_string);
++  free(unicode_string);
++  return res;
++}
++/* ------------------------------------------------------------------- */
+ 
+ void nxwinClearSelection(void)
+ {
+@@ -181,13 +239,15 @@
+    
+    nxwinSelection = TRUE;
+ 
++   /* commented by dimbor - why we need to clear windows clipboard? */
++   /*
+    if (OpenClipboard(lastHwnd))
+    {
+      windowsOwner = FALSE;
+      EmptyClipboard();
+      CloseClipboard();
+    }
+-
++   */
+    nxwinUpdateClipboard = 1;
+    nxwinLastSelection = pSelection->selection;
+ /*
+@@ -265,20 +325,15 @@
+                (target == clientUTF8_STRING))
+    {
+       HGLOBAL hGlobal;
+-      char *pszGlobalData;
++      /* code bellow changed by dimbor - kill bug with noncorrect cut/paste international symbols */
++      wchar_t *pszGlobalData;
++
+       xEvent x;
+ 
+       /* Access the clipboard */
+       if (!OpenClipboard (lastHwnd)) return 0;
+ 
+-      if (target == clientUTF8_STRING)
+-      {
+-        hGlobal = GetClipboardData (CF_UNICODETEXT);
+-      }
+-      else
+-      {
+-        hGlobal = GetClipboardData (CF_TEXT);
+-      }
++      hGlobal = GetClipboardData (CF_UNICODETEXT);
+ 
+       if (!hGlobal)
+       {
+@@ -293,58 +348,43 @@
+                                NoEventMask , NullGrab);
+         return 1;
+       }
+-      pszGlobalData = (char *) GlobalLock (hGlobal);
++      pszGlobalData = (wchar_t *) GlobalLock (hGlobal);
+ 
++      char *pszData = unicode_to_cp(CP_ACP,pszGlobalData);
++      char *pszData2;
+       if (target == clientUTF8_STRING)
+-      {
+-        int bytesNeeded;
+-        HGLOBAL hGlobal2;
+-        char *pszGlobalData2 = NULL;
+-
+-        bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, (WCHAR *) pszGlobalData, -1,
+-                                              pszGlobalData2, 0, NULL, NULL) + 1;
+-  
+-        hGlobal2 = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, bytesNeeded);
+-        pszGlobalData2 = GlobalLock(hGlobal2);
+-  
+-        /* Convert Unicode text to UTF8 */
+-        WideCharToMultiByte(CP_UTF8, 0, (WCHAR *) pszGlobalData, -1, pszGlobalData2,
+-                                bytesNeeded, NULL, NULL);
+-
+-        /* Convert DOS string to UNIX string */
+-        DOStoUNIX (pszGlobalData2, strlen (pszGlobalData2));
+-
+-        /* Copy the clipboard text to the requesting window */
+-        ChangeWindowProperty(pWin,
+-                             property,
+-                             target,
+-                             8,
+-                             PropModeReplace,
+-                             strlen(pszGlobalData2),
+-                             pszGlobalData2, 1);
+-
+-        GlobalUnlock (hGlobal2);
+-      }
++        pszData2 = ansi_to_utf8(pszData);
+       else
+-      {
+-        /* Convert DOS string to UNIX string */
+-        DOStoUNIX (pszGlobalData, strlen (pszGlobalData));
++        pszData2 = pszData;
++
++      /*
++      ErrorF("%s: %d -> %d -> %d\n",NameForAtom(target),
++              strlen(pszGlobalData),strlen(pszData),strlen(pszData2));
++      */
++
++      /* Convert DOS string to UNIX string */
++      DOStoUNIX (pszData2, strlen (pszData2));
++      /* Copy the clipboard text to the requesting window */
++      ChangeWindowProperty(pWin,
++                           property,
++                           target,
++                           8,
++                           PropModeReplace,
++                           strlen(pszData2),
++                           pszData2, 1);
+ 
+-        /* Copy the clipboard text to the requesting window */
+-        ChangeWindowProperty(pWin,
+-                             property,
+-                             target,
+-                             8,
+-                             PropModeReplace,
+-                             strlen(pszGlobalData),
+-                             pszGlobalData, 1);
+-      }
+ 
+       /* Release the clipboard data */
+       GlobalUnlock (hGlobal);
+       pszGlobalData = NULL;
+       CloseClipboard ();
+ 
++      if(pszData)
++        free(pszData);
++      if (target == clientUTF8_STRING && pszData2)
++        free(pszData2);
++      /* ------------------------------------------------------------------- */
++
+       x.u.u.type = SelectionNotify;
+       x.u.selectionNotify.time = time;
+       x.u.selectionNotify.requestor = requestor;
+@@ -514,6 +554,14 @@
+       }
+       /* Push the selection data to the Windows clipboard */
+       SetClipboardData (CF_TEXT, hGlobal);
++      /* by dimbor */
++      LCID lc = GetUserDefaultLCID();
++      HANDLE hData = GlobalAlloc(GMEM_ZEROINIT, sizeof(lc));
++      LCID* pLc = (LCID*)GlobalLock(hData);
++      *pLc = lc;
++      GlobalUnlock(hData);
++      SetClipboardData(CF_LOCALE, hData);
++      /* --------- */
+       CloseClipboard();
+   }
+ }
+@@ -549,8 +597,38 @@
+                                         &ulReturnItems, &ulReturnBytesLeft, &pszReturnData);
+         if ((iReturn == Success) && (ulReturnItems > 0))
+         {
+-          nxwinSetWindowClipboard(pszReturnData, ulReturnItems);
+-
++        	/* add by dimbor (idea from zahvatov)*/
++        	if (x->u.selectionNotify.target != XA_STRING)
++        	{
++              char * pszTemp = calloc(sizeof(char),ulReturnItems+1);
++              if (!pszTemp)
++                return FALSE;
++              memcpy(pszTemp, pszReturnData, ulReturnItems);
++              *(pszTemp + ulReturnItems) = 0;
++              char * pszTemp2 = utf8_to_ansi(pszTemp);
++/*              char szMsg[1024]; char *pszMsg=(char *) &szMsg;
++              sprintf(pszMsg,"x->u.selectionNotify.target: %s\natomReturnType: %s\nSrc: %s\nAnsi: %s\n",
++                      NameForAtom(x->u.selectionNotify.target),
++                      NameForAtom(atomReturnType),
++                      pszTemp,
++                      pszTemp2);
++//            MessageBox(NULL,pszMsg,"Copy UTF8!",MB_OK);
++              ErrorF("Copy UTF8: %s",pszMsg);
++*/
++              if (!pszTemp2)
++                return FALSE;
++              nxwinSetWindowClipboard(pszTemp2, strlen(pszTemp2));
++              free(pszTemp2);
++            }
++        	/* ------------------------------------------------------------------- */
++            else /* original code */
++            {
++/*
++            	ErrorF("Copy STRING %s\n",pszReturnData);
++//            MessageBox(NULL,pszReturnData,"Copy STRING!",MB_OK);
++*/
++              nxwinSetWindowClipboard(pszReturnData, ulReturnItems);
++            }
+           clientOwner = TRUE;
+           /* nxwinClearSelection(); */
+ 
+@@ -571,12 +649,23 @@
+     x.u.selectionRequest.time = GetTimeInMillis();
+     x.u.selectionRequest.owner = lastOwnerWindow;
+     x.u.selectionRequest.requestor = WindowTable[0]->drawable.id;
++    /* by dimbor - CLIPBOARD instead of PRIMARY ??? */
++    //x.u.selectionRequest.selection = clientCLIPBOARD;
+     x.u.selectionRequest.selection = nxwinLastSelection;
+-    x.u.selectionRequest.target = XA_STRING;
++    /* ------------------------------------------------ */
++    x.u.selectionRequest.target = clientUTF8_STRING;
+     x.u.selectionRequest.property = clientCutProperty;
+ 
+     (void) TryClientEvents (lastOwnerClientPtr, &x, 1,
+                                 NoEventMask, NoEventMask /* CantBeFiltered */,
++                                NullGrab);
++    SetCriticalOutputPending();
++
++    x.u.selectionRequest.target = XA_STRING;
++    x.u.selectionRequest.time = GetTimeInMillis();
++
++    (void) TryClientEvents (lastOwnerClientPtr, &x, 1,
++                                NoEventMask, NoEventMask /* CantBeFiltered */,
+                                 NullGrab);
+     SetCriticalOutputPending();
+   }
+diff -u -P -x '*.[ao]' nxwin.orig/winmultiwindowwindow.c nxwin/winmultiwindowwindow.c
+--- nxwin.orig/winmultiwindowwindow.c	2010-01-29 17:14:18.000000000 +0300
++++ nxwin/winmultiwindowwindow.c	2010-06-22 10:50:34.640625000 +0400
+@@ -52,6 +52,8 @@
+ #include "winmultstack.h"
+ #include "windowstr.h"
+ #include "propertyst.h"
++/* add by dimbor */
++#include "../xfree86/common/atKeynames.h"
+ 
+ #ifdef NXWIN_MULTIWINDOW
+ extern Bool nxwinMultiwindow;
+@@ -69,6 +71,10 @@
+ 
+ extern MultStackQueuePtr pMultStackQueue;
+ 
++/* varibles for painting and positioning by dimbor */
++HWND WHandlers[50];
++int CountHandlers=0;
++
+ #ifndef NXWIN_OLD_CURSORS
+ 
+ extern nxwinOldCursors;
+@@ -114,6 +120,72 @@
+ 
+ void
+ winResizeXWindow (WindowPtr, int, int);
++
++/* add by dimbor */
++extern ATOM WM_TRANSIENT_FOR;
++extern ATOM _MOTIF_WM_HINTS;
++extern ATOM _NET_WM_WINDOW_TYPE;
++extern ATOM _NET_WM_WINDOW_TYPE_NORMAL;
++extern ATOM _NET_WM_WINDOW_TYPE_DIALOG;
++extern ATOM _NET_WM_WINDOW_TYPE_UTILITY;
++extern ATOM WM_NORMAL_HINTS;
++//extern ATOM WM_STATE;
++
++DWORD
++GetWinStyles(WindowPtr,DWORD *,DWORD *);
++
++BOOL
++ContainsInParent(WindowPtr);
++
++BOOL 
++IsWMWindow(WindowPtr);
++
++PropertyPtr
++GetWinProp (WindowPtr, ATOM);
++
++WindowPtr
++winIsTransientForWindow (WindowPtr);
++
++BOOL 
++IsWinMaximized(WindowPtr,DWORD,DWORD);
++
++BOOL 
++IsSickWin(WindowPtr,WindowPtr);
++
++#define MOVE_MAGIC
++
++static BOOL bOpenMaximized=FALSE;
++
++static BOOL bNeedActivate=FALSE;
++
++typedef struct {
++	long flags;		/* marks which fields in this structure are defined */
++	int x, y;		/* Obsolete */
++	int width, height;	/* Obsolete */
++	int min_width, min_height;
++	int max_width, max_height;
++	int width_inc, height_inc;
++	struct {
++	       int x;		/* numerator */
++	       int y;		/* denominator */
++	} min_aspect, max_aspect;
++	int base_width, base_height;
++	int win_gravity;
++	/* this structure may be extended in the future */
++} XSizeHints;
++
++/*
++typedef struct
++{
++  CARD32 state;
++  Window icon;
++} WMStateRec;
++*/
++/*
++void
++SetInitWinPos(WindowPtr pWin);
++*/
++/* */
+ 	
+ #ifdef SHAPE
+ static
+@@ -237,6 +309,7 @@
+   DWORD dwExStyle;
+   DWORD dwStyle;
+ 
++  winScreenInfo		*s_pScreenInfo = pWinPriv->pScreenPriv->pScreenInfo;
+ #if CYGMULTIWINDOW_DEBUG
+   ErrorF ("winPositionWindowMultiWindow - pWin: %08x\n", pWin);
+ #endif
+@@ -249,6 +322,11 @@
+   if (!hWnd)
+     return fResult;
+ 
++  /* by dimbor - temporary and very bad solution */
++  extern ATOM _NET_WM_NAME;
++  if(!GetWinProp(pWin,_NET_WM_NAME))
++    return fResult;
++
+   /* Get the Windows window style and extended style */
+   dwExStyle = GetWindowLongPtr (hWnd, GWL_EXSTYLE);
+   dwStyle = GetWindowLongPtr (hWnd, GWL_STYLE);
+@@ -256,9 +334,9 @@
+   /* Get the width of the X window border */
+   iBorder = wBorderWidth (pWin);
+ 
+-  /* Get the X and Y location of the X window */
+-  iX = pWin->drawable.x + GetSystemMetrics (SM_XVIRTUALSCREEN);
+-  iY = pWin->drawable.y + GetSystemMetrics (SM_YVIRTUALSCREEN);
++  /* Get the X and Y location of the X window (changed by dimbor)*/
++  iX = pWin->drawable.x + s_pScreenInfo->dwXOffset;
++  iY = pWin->drawable.y + s_pScreenInfo->dwYOffset;
+ 
+   /* Get the height and width of the X window */
+   iWidth = pWin->drawable.width;
+@@ -399,6 +477,10 @@
+   /* Flag that this window has not been destroyed */
+   pWinPriv->fXKilled = FALSE;
+ 
++  /* we couldn't duplicate some windows (by dimbor)*/
++  if (!IsWMWindow(pWin))
++	  return fResult;
++
+   /* Refresh/redisplay the Windows window associated with this X window */
+   winUpdateWindowsWindow (pWin);
+ 
+@@ -483,6 +565,14 @@
+       uFlags = SWP_NOMOVE | SWP_NOSIZE;
+     }
+ 
++  /* by dimbor*/
++  DWORD dwSt,dwExSt;
++  if(GetWinStyles(pWin,&dwSt,&dwExSt) == 2)
++  {
++    hInsertAfter = HWND_TOP;
++    uFlags = SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_SHOWWINDOW;
++  }
++
+   if (nxwinSetWindowTrap == 0) {
+ 
+     SetWindowPos (pWinPriv->hWnd,
+@@ -654,6 +744,11 @@
+ 		      pRects->y1, pRects->y2, iOffsetY);
+ 	    }
+ 
++     /* add by dimbor */
++     winPrivScreenPtr s_pScreenPriv = pWinPriv->pScreenPriv;
++     winScreenInfo		*s_pScreenInfo = s_pScreenPriv->pScreenInfo;
++     OffsetRgn(hRgnRect,s_pScreenInfo->dwXOffset,s_pScreenInfo->dwYOffset);
++
+ 	  /* Merge the Windows region with the accumulated region */
+ 	  if (CombineRgn (hRgn, hRgn, hRgnRect, RGN_OR) == ERROR)
+ 	    {
+@@ -730,7 +825,7 @@
+   return NULL;
+ }
+ 
+-static WindowPtr
++WindowPtr
+ winIsTransientForWindow (WindowPtr pWin)
+ {
+   PropertyPtr pProp;
+@@ -750,6 +845,632 @@
+   return NULL;
+ }
+ 
++/* --------------------- Start of addition by dimbor ---------------------------------- */
++/* it's very crooked attempt to fix behaviour of some visual elements of windows */
++PropertyPtr
++GetWinProp (WindowPtr pWin, ATOM Aprop)
++{
++  PropertyPtr pProp = wUserProps(pWin);
++  while (pProp)
++  {
++    if (pProp->propertyName == Aprop)
++     /* property present  */
++      return pProp;
++    else
++	   pProp = pProp->next;
++  }
++  /* property not present */
++  return NULL;
++}
++
++/*
++void
++SetInitWinPos(WindowPtr pWin)
++{
++  XSizeHints *SH=(XSizeHints *)GetWinProp(pWin,WM_NORMAL_HINTS)->data;
++  if (SH)
++    winMoveXWindow (pWin,SH->x,SH->y);
++}
++*/
++
++//#define DIMBOR
++#ifdef DIMBOR
++void
++SZHToLog(WindowPtr pWin)
++{
++  XSizeHints *SH=(XSizeHints *)GetWinProp(pWin,WM_NORMAL_HINTS)->data;
++  if (SH)
++  ErrorF(">SIZE_HINTS: fl [%b], x.y %d.%d\twh %d/%d, nin %d/%d, max %d/%d, base %d/%d\n",
++         LOWORD(SH->flags),SH->x,SH->y,SH->width,SH->height,SH->min_width,SH->min_height,SH->max_width,SH->max_height,SH->base_width,SH->base_height);
++  else
++    ErrorF(">SIZE_HINTS: _NONE_\n");
++}
++
++void PrintStacks(WindowPtr pWin, BOOL VisOnly, char *stage)
++{
++  WindowPtr p = pWin;
++  ErrorF ("! Stage %s; WinStack [",stage);
++  if (!p)
++  {
++    ErrorF("]\n");
++    return;
++  }
++  WindowPtr pPapa = winIsTransientForWindow(pWin);
++  for (p=WindowTable[0]->firstChild; p; p=p->nextSib)
++  {
++    unsigned long dwID=p->drawable.id;
++    if (!VisOnly || (VisOnly && winGetWindowPriv(p)->hWnd))
++    {
++      if(dwID)
++        ErrorF(" %04x",dwID & RESOURCE_ID_MASK);
++      else
++        ErrorF(" %p",p);
++      if (p == pWin)
++        ErrorF("*");
++      else if (p == pPapa)
++        ErrorF("p");
++      else
++        ErrorF(" ");
++    }
++  }
++
++  ErrorF("]\n");
++}
++
++char * GetWindowName(WindowPtr pWin)
++{
++  char *res=NULL;
++  wchar_t *wstr=NULL;
++  extern void GetWindowNameW(void *, wchar_t **);
++  GetWindowNameW(pWin, &wstr);
++  if(wstr)
++  {
++    extern char * unicode_to_cp(UINT, wchar_t *);
++    res=unicode_to_cp(CP_ACP,wstr);
++    free(wstr);
++  }
++  return res;
++}
++
++void PrintTree(WindowPtr pW,DWORD level)
++{
++  WindowPtr p;
++  char *pn=NULL;
++  int i=1;
++  if(level==0)
++    p=WindowTable[0]->firstChild;
++  else
++    p=pW->firstChild;
++
++  while (p)
++  {
++//    DWORD dwID=p->drawable.id;
++    while(i<level)
++    {
++      ErrorF("\t");
++      i++;
++    }
++//    ErrorF("%04x\n",dwID & RESOURCE_ID_MASK);
++    pn=GetWindowName(p);
++    ErrorF("[%p] - %s\n",p,pn);
++    if(pn)
++     free(pn);
++    PrintTree(p,level+1);
++    p= p->nextSib;
++   }
++}
++
++void PrintWinProps(WindowPtr pWin)
++/* for debug only */
++{
++   register int j;
++  ErrorF ("--> PirntWinProps [%p]\n",pWin);
++  PropertyPtr pProp = wUserProps (pWin);
++  while (pProp)
++  {
++    ErrorF("#Prop [%s] (Atom %d): type [%s], ", NameForAtom(pProp->propertyName),pProp->propertyName, NameForAtom(pProp->type));
++    ErrorF("size=%d, [", pProp->size);
++    if ( strcmp(NameForAtom(pProp->type),"ATOM") == 0 )
++    {
++       ATOM *data= (ATOM *)pProp->data;
++       for (j=0; j<pProp->size; j++)
++       {
++         ErrorF("%s(%ld) ", NameForAtom(*data), (long int) *data);
++    	   data++;
++       }
++    }
++    else
++      for (j=0; j<(pProp->format/8)*pProp->size; j++)
++       ErrorF("%c", ((char *) pProp->data)[j]);
++    ErrorF("]\n");
++
++    pProp = pProp->next;
++  }
++  ErrorF ("--> ==========================\n");
++}
++#endif
++#undef DIMBOR
++
++BOOL ContainsInParent(WindowPtr pWin)
++/* ContainsInParent by dimbor
++ * returns TRUE - window's rect contains in "parent" window's rect
++ *			  FALSE - otherwise
++*/
++{
++  WindowPtr pPapa=winIsTransientForWindow(pWin);
++  if (!pPapa)
++    return FALSE;
++  RECT rcWin,rcPapa,rcI;
++  SetRect (&rcWin,pWin->drawable.x,pWin->drawable.y,pWin->drawable.x+pWin->drawable.width,pWin->drawable.y+pWin->drawable.height);
++  SetRect (&rcPapa,pPapa->drawable.x,pPapa->drawable.y,pPapa->drawable.x+pPapa->drawable.width,pPapa->drawable.y+pPapa->drawable.height);
++  IntersectRect(&rcI,&rcWin,&rcPapa);
++#ifdef DIMBOR
++  ErrorF("---- pWin [%p] - rcPapa %d:%d>%d:%d; rcWin %d:%d>%d:%d\n",pWin,
++          rcPapa.left,rcPapa.top,rcPapa.right,rcPapa.bottom,
++          rcWin.left,rcWin.top,rcWin.right,rcWin.bottom);
++#endif
++  return EqualRect(&rcI,&rcWin);
++}
++
++BOOL IsWinMaximized(WindowPtr pWin,DWORD dwSt,DWORD dwExSt)
++/* IsWinMaximized by dimbor
++ * returns TRUE - window size less than size of workarea
++ *			  FALSE - otherwise
++*/
++{
++  winPrivScreenPtr s_pScreenPriv = winGetWindowPriv(pWin)->pScreenPriv;
++//  winScreenInfo *s_pScreenInfo = s_pScreenPriv->pScreenInfo;
++
++  RECT		rcW1,rcScr;
++  SetRect (&rcW1,pWin->drawable.x,pWin->drawable.y,
++            pWin->drawable.x+pWin->drawable.width,
++            pWin->drawable.y+pWin->drawable.height);
++  
++
++  GetClientRect(s_pScreenPriv->hwndScreen,&rcScr);
++  int iScrW=rcScr.right;
++  int iScrH=rcScr.bottom;
++
++  AdjustWindowRectEx (&rcW1,dwSt,FALSE,dwExSt);
++
++  int iWinW=rcW1.right-rcW1.left;
++  int iWinH=rcW1.bottom-rcW1.top;
++
++
++//#define DIMBOR
++#ifdef DIMBOR
++  ErrorF ("#IsWinMaximized [%p] Screen* %d.%d %dX%d; Window %d.%d %dx%d ->  %d.%d %dx%d\n",pWin,
++           rcScr.left,rcScr.top,rcScr.right-rcScr.left,rcScr.bottom-rcScr.top,
++           rcW1.left,rcW1.top,rcW1.right-rcW1.left,rcW1.bottom-rcW1.top,
++           rcW2.left,rcW2.top,rcW2.right-rcW2.left,rcW2.bottom-rcW2.top);
++#endif
++#undef DIMBOR
++
++  return (iWinW>iScrW) && (iWinH>iScrH);
++}
++
++BOOL IsWMWindow(WindowPtr pWin)
++/* IsWMWindow by dimbor
++ * returns TRUE - window need to be created and controlled by wm
++ *			  FALSE - otherwise
++*/
++{
++  DWORD dwSt,dwExSt;
++  if (GetWinStyles(pWin,&dwSt,&dwExSt)<3)
++    /* app windows or some dialogs or "sly" windows with caption */
++    return TRUE;
++  if (!ContainsInParent(pWin))
++    /* parent window has not possibility to draw window fully */
++    return TRUE;
++  return FALSE;
++}
++
++
++/* GetWinStyles by dimbor
++ * returns 0 - app window
++ *         1 - modal dialog window width CAPTION
++ *			  2 - "pseudo-MDI" window w/o CAPTION, also need to be controlled by wm
++ *         3 - tool window w/o CAPTION
++*/
++DWORD
++GetWinStyles(WindowPtr pWin,DWORD *dwSt,DWORD *dwExSt)
++{
++  extern ATOM WM_NAME,_NET_WM_NAME;
++  char *strname=NULL;
++
++  /* tool window w/o decoration by default */
++  *dwSt = WS_POPUP; *dwExSt = WS_EX_TOOLWINDOW;
++  if (!pWin)
++    return 0;
++  WindowPtr IsTrans=winIsTransientForWindow(pWin);
++  PropertyPtr pProp=GetWinProp(pWin,_MOTIF_WM_HINTS);
++  /* 
++   * try to analyse _MOTIF_WM_HINTS first, because wine did not set
++   * correctly _NET_WM_WINDOW_TYPE Atoms
++   */
++  if (pProp)  /* _MOTIF_WM_HINTS present */
++  {
++//#define DIMBOR
++#undef DIMBOR
++   MwmHints *mwm_hints = (MwmHints *) pProp->data;
++   unsigned long decs = mwm_hints->decorations;
++   #ifdef DIMBOR
++   ErrorF("pWin [%08x], Trans = %p, OvrD [%d], mwm_hints->decorations  %d = [",
++           pWin,IsTrans,pWin->overrideRedirect,decs);
++   #endif
++   if (!decs) 
++   {
++    /*
++     * there is "hack" for distinguish of "pseudo-MDI" wine's windows
++     */
++    if((pProp=GetWinProp(pWin,_NET_WM_NAME)) && pProp->data)
++    {
++      strname=(char *) pProp->data;
++      if(strlen(strname))
++      {
++        #ifdef DIMBOR
++        ErrorF("pWin [%08x], _NET_WM_NAME [%s], Status = 2\n",pWin,strname);
++        #endif
++        return 2;
++      }
++    }
++    if( (!strname) && (pProp=GetWinProp(pWin,WM_NAME)) && pProp->data)
++    {
++      strname=(char *) pProp->data;
++      if(strlen(strname))
++      {
++        #ifdef DIMBOR
++        ErrorF("pWin [%08x], WM_NAME [%s], !Status = 2\n",pWin,strname);
++        #endif
++        return 2;
++       }
++    }
++    #ifdef DIMBOR
++    ErrorF("], !Status = 3\n");
++    #endif
++    return 3; /* simple popup window */
++   }
++   DWORD res=3;
++   *dwSt=WS_POPUP;
++   if (decs & MWM_DECOR_BORDER)
++   {
++     *dwSt|=WS_BORDER;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_BORDER");
++     #endif
++   }
++   if (decs & MWM_DECOR_RESIZEH)
++   {
++     *dwSt|=WS_SIZEBOX;
++     res=0;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_RESIZEH");
++     #endif
++   }
++   if (decs & MWM_DECOR_TITLE)
++   {
++     *dwSt|=WS_CAPTION;
++     res=1;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_TITLE");
++     #endif
++   }
++   if (decs & MWM_DECOR_MENU)
++   {
++     *dwSt|=WS_SYSMENU;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_MENU");
++     #endif
++   }
++   if (decs & MWM_DECOR_MINIMIZE)
++   {
++     *dwSt|=WS_MINIMIZEBOX;
++     res=0;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_MINIMIZE");
++     #endif
++   }
++   if (decs & MWM_DECOR_MAXIMIZE)
++   {
++     *dwSt|=WS_MAXIMIZEBOX;
++     res=0;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_MAXIMIZE");
++     #endif
++   }
++   if (decs & MWM_DECOR_ALL)
++   {
++     *dwSt=WS_OVERLAPPEDWINDOW;
++     res=0;
++     #ifdef DIMBOR
++     ErrorF(" MWM_DECOR_ALL");
++     #endif
++   }
++   if (!IsTrans)
++   {
++     res=0;
++     *dwExSt=WS_EX_APPWINDOW;
++   }
++   else
++   {
++     DWORD dwS,dwExS;
++     if(res==1 && GetWinStyles(IsTrans,&dwS,&dwExS)==2)
++     {
++       res=0;
++       *dwExSt=WS_EX_DLGMODALFRAME;
++     }
++   }
++   #ifdef DIMBOR
++   ErrorF("], Status = %d\n",res);
++   #endif
++
++   return res;
++#undef DIMBOR
++  }
++  /* do we need this block now ??? */
++  pProp=GetWinProp(pWin,_NET_WM_WINDOW_TYPE);
++  if (pProp)  /* _NET_WM_WINDOW_TYPE present */
++  {
++    ATOM *NWMWT = (ATOM *) pProp->data;
++    #if 0
++    ErrorF("pWin [%08x], Trans = %p, [%s], OvrD [%d]\n",pWin,
++            IsTrans,NameForAtom(*NWMWT),pWin->overrideRedirect);
++    #endif
++    if (IsTrans) /* it's child */
++    {
++      if (*NWMWT == _NET_WM_WINDOW_TYPE_NORMAL)
++        return 2;
++      if (*NWMWT == _NET_WM_WINDOW_TYPE_DIALOG)
++      {
++        /* dialog window - still have litle font, none system icon 
++         * and not present on windows taskbar 
++         */
++        *dwSt = WS_CAPTION | WS_SYSMENU | WS_POPUP;
++        *dwExSt = WS_EX_TOOLWINDOW;
++        return 1;
++      }
++      /* if (*NWMWT == _NET_WM_WINDOW_TYPE_UTILITY) */
++      return 3;
++    }
++    else
++    {
++      if (*NWMWT == _NET_WM_WINDOW_TYPE_NORMAL || *NWMWT == _NET_WM_WINDOW_TYPE_DIALOG)
++      {
++        /* app main window */
++        *dwSt = WS_POPUP | WS_SIZEBOX | WS_OVERLAPPEDWINDOW;
++        *dwExSt = WS_EX_APPWINDOW;
++        return 0;
++      }
++      if (*NWMWT == _NET_WM_WINDOW_TYPE_UTILITY)
++        return 3;
++      return 3;
++    	}
++  }
++  /* ------------------------- */
++  if (IsTrans)
++    return 3;
++  else
++  {
++    /* tmp ??? */
++    if((pProp=GetWinProp(pWin,WM_NAME)) && pProp->data)
++    {
++      strname=(char *) pProp->data;
++      if(strlen(strname))
++      {
++        /* app main window */
++        *dwSt = WS_POPUP | WS_SIZEBOX | WS_OVERLAPPEDWINDOW;
++        *dwExSt = WS_EX_APPWINDOW;
++        return 0;
++       }
++    }
++    return 3;
++  }
++}
++
++BOOL IsSlyWineWindow(WindowPtr pWin)
++{
++  BOOL res=FALSE;
++  if(!pWin)
++   return res;
++  char *res_name, *res_class;
++  if(winGetWindowPriv(pWin)->hWnd && GetClassHint(pWin,&res_name,&res_class))
++  {
++    if(strcmp(res_class,"Wine") == 0)
++    {
++      extern ATOM _NET_WM_NAME;
++      PropertyPtr pProp;
++      if((pProp=GetWinProp(pWin,_NET_WM_NAME)) && pProp->data)
++      {
++        char *strname;
++        strname=(char *) pProp->data;
++        if(!strlen(strname))
++          res=TRUE;
++      }
++      else 
++        res=TRUE;
++     }
++     if(res_name)
++      free (res_name);
++     if(res_class)
++      free (res_class);
++  }
++  return res;
++}
++
++BOOL 
++IsSickWin(WindowPtr pW,WindowPtr pWin)
++{
++  winScreenInfo		*s_pScreenInfo = winGetScreenPriv(pWin->drawable.pScreen)->pScreenInfo;
++
++  if(!s_pScreenInfo)
++    return FALSE;
++
++  if(!s_pScreenInfo->fMultiWindow)
++    return FALSE;
++ if(IsSlyWineWindow(pW))
++    return TRUE;
++  if(pWin != winIsTransientForWindow(pW))
++    return FALSE;
++  char                  *res_name, *res_class;
++  BOOL res=FALSE;
++  if (GetClassHint (pW, &res_name, &res_class))
++    {
++      res=(strcmp(res_class,"Wine") == 0);
++      free (res_name);
++      free (res_class);
++    }
++  return res;
++}
++
++BOOL ptInFakeTitle(WindowPtr pWin,POINT *pt)
++{
++  HWND hwnd=winGetWindowPriv(pWin)->hWnd;
++  if(!hwnd)
++    return FALSE;
++  DWORD dwSt,dwExSt;
++  if(GetWinStyles(pWin,&dwSt,&dwExSt)!=2) /* no fake-title present */
++    return FALSE;
++  RECT rcW;
++  GetWindowRect(hwnd,&rcW);
++  /* absolute values gets from nonclient_metrics structure,
++   * wine dlls/user32/sysparams.c (thnx to prof at unixxforum.org)
++   */
++  return ((pt->y<19 && pt->y>1) && 
++          (pt->x<(rcW.right-rcW.left-19) && pt->x>1));
++}
++
++static int winGetTransients(WindowPtr pWin,WindowPtr *Sibl)
++/* 
++ * returns count of transient windows for pWin and fills array by they pointers
++ */
++{
++
++  WindowPtr retWin;
++  PropertyPtr pProp;
++  pointer data;
++  int i=0;
++
++  BOOL IsTrans=FALSE;
++  retWin = pWin -> prevSib;
++
++  while (retWin)
++  {
++    pProp = wUserProps(retWin);
++    IsTrans=FALSE;
++    while (pProp)
++    {
++      data = pProp -> data;
++      if (pProp->propertyName == WM_TRANSIENT_FOR)
++      {
++        if (winGetWindowID(pWin) == *(XID*)data &&
++               IsWindow(winGetWindowPriv(retWin)->hWnd))
++        {
++          IsTrans=TRUE;
++          *Sibl=retWin;
++          i++; Sibl++;
++        }
++      }
++      pProp = pProp -> next;
++    }
++/*
++    if(!IsTrans && IsSlyWineWindow(retWin))
++    {
++      *Sibl=retWin;
++      i++; Sibl++;
++    }
++*/
++    retWin = retWin -> prevSib;
++  }
++  retWin = pWin -> nextSib;
++
++  while (retWin)
++  {
++    pProp = wUserProps(retWin);
++    IsTrans=FALSE;
++    while (pProp)
++    {
++      data = pProp -> data;
++      if (pProp->propertyName == WM_TRANSIENT_FOR)
++      {
++        if (winGetWindowID(pWin) == *(XID*)data &&
++            IsWindow(winGetWindowPriv(retWin)->hWnd))
++        {
++          IsTrans=TRUE;
++          *Sibl=retWin;
++          i++; Sibl++;
++        }
++      }
++      pProp = pProp -> next;
++    }
++/*
++    if(!IsTrans && IsSlyWineWindow(retWin))
++    {
++      *Sibl=retWin;
++      i++; Sibl++;
++    }
++*/
++    retWin = retWin -> nextSib;
++  }
++  return i;
++}
++
++void Cmd2TransientWindows (void *pWMInfo,WindowPtr pWin,BOOL Send2WM,int Cmd)
++{
++	 WindowPtr Sibls[sizeof(WindowPtr)*50];
++	 WindowPtr *CurSibl=Sibls;
++    winWMMessageRec	wmMsg2;
++    int i;
++    int CountSibls = winGetTransients(pWin,Sibls);
++#ifdef DIMBOR
++	ErrorF("### Count = %d\n",CountSibls);
++#endif
++    for (i=0;i<CountSibls;i++)
++    {
++      if (Send2WM)
++		{
++#ifdef DIMBOR
++	ErrorF("--- Send2WM for pWin [%p]\n",CurSibl);
++#endif
++        wmMsg2.pWin= *CurSibl;
++		  wmMsg2.hwndWindow= winGetWindowPriv(*CurSibl)->hWnd;
++        wmMsg2.iWindow=(Window)GetProp (wmMsg2.hwndWindow, WIN_WID_PROP);
++	     wmMsg2.msg = Cmd;
++        winSendMessageToWM (pWMInfo, &wmMsg2);
++        CurSibl++;
++      }
++      else
++      {
++        WINDOWPLACEMENT windPlace;
++        windPlace.length = sizeof(WINDOWPLACEMENT);
++        GetWindowPlacement(winGetWindowPriv(*CurSibl)->hWnd, &windPlace);
++        windPlace.showCmd = Cmd;
++        SetWindowPlacement(winGetWindowPriv(*CurSibl)->hWnd, &windPlace);
++        CurSibl++;
++      }
++    }
++}
++
++void RenewWindowsHandles(void)
++{
++  HWND hwnd;
++  char strClassName[100];
++  CountHandlers=0;
++  hwnd = GetWindow(GetDesktopWindow(),GW_CHILD);
++  while (hwnd)
++  {
++    if (GetClassName (hwnd, strClassName, 100))
++    {
++      if(strncmp (WINDOW_CLASS_X, strClassName, strlen(WINDOW_CLASS_X)) == 0)
++      {
++        CountHandlers++; WHandlers[CountHandlers]=hwnd;
++      }
++    }
++    hwnd = GetWindow(hwnd, GW_HWNDNEXT);
++  }
++}
++/* ----------- End of addition by dimbor ------------------------------------------- */
++
++
+ /*
+  * winTopLevelWindowProc - Window procedure for all top-level Windows windows.
+  */
+@@ -768,11 +1489,16 @@
+   winScreenInfo		*s_pScreenInfo = NULL;
+   HWND			hwndScreen = NULL;
+   DrawablePtr		pDraw = NULL;
+-  int		        iX, iY, iWidth, iHeight, iBorder;
++  int		        iX, iY; /*  , iWidth, iHeight, iBorder; */
+   winWMMessageRec	wmMsg;
+   static Bool		s_fTracking = FALSE;
+   static Bool           s_fCursor = TRUE;
+   WindowPtr             transientForWin;
++  /* by dimbor */
++  DWORD dwSt,dwExSt,dwStWin;
++  WindowPtr Sibls[sizeof(WindowPtr)*50];
++  WindowPtr *CurSibl=Sibls;
++  int CountSibls;
+ 
+   /* Check if the Windows window property for our X window pointer is valid */
+   if ((pWin = GetProp (hwnd, WIN_WINDOW_PROP)) != NULL)
+@@ -861,54 +1587,87 @@
+ 	       (HANDLE)winGetWindowID (((LPCREATESTRUCT) lParam)->lpCreateParams));
+       return 0;
+ 
++    case WM_ERASEBKGND: /* add by dimbor */
++      return 0;
+     case WM_PAINT:
+       /* Only paint if our window handle is valid */
+       if (hwndScreen == NULL)
+ 	break;
+ 
++/* --------------------- Start of changes by dimbor ---------------------------------- */
++      int res;
++      DWORD i, size;
++      HRGN UpdRgn=CreateRectRgn(0,0,0,0);
++      RGNDATA *data = NULL;
++      RECT *rc0;
++      res=GetUpdateRgn(hwnd,UpdRgn,FALSE);
++	   if (res == NULLREGION || res == ERROR)
++	   {
++        if (res == NULLREGION)
++          DeleteObject(UpdRgn);
++        break; 
++	   }
++      HWND hwndD=GetDesktopWindow();
++      POINT pt0; pt0.x=0; pt0.y=0;
++      MapWindowPoints(hwnd,hwndD,&pt0,1);
++
+       /* BeginPaint gives us an hdc that clips to the invalidated region */
+       hdcUpdate = BeginPaint (hwnd, &ps);
+ 
+-#if 0
+-      /* NOTE: Doesn't appear to be used - Harold Hunt - 2003/01/15 */
+-      /* Get the dimensions of the client area */
+-      GetClientRect (hwnd, &rcClient);
+-#endif
+-
+-      /* Get the position and dimensions of the window */
+-      iBorder = wBorderWidth (pWin);
+-      iX = pWin->drawable.x;
+-      iY = pWin->drawable.y;
+-      iWidth = pWin->drawable.width;
+-      iHeight = pWin->drawable.height;
+-
+-      /* Try to copy from the shadow buffer */
+-      if (!BitBlt (hdcUpdate,
+-		   0, 0,
+-		   iWidth, iHeight,
+-		   s_pScreenPriv->hdcShadow,
+-		   iX, iY,
+-		   SRCCOPY))
+-	{
+-	  LPVOID lpMsgBuf;
++      HRGN VisRgn=CreateRectRgn(0,0,0,0);
++      GetRandomRgn(hdcUpdate,VisRgn,SYSRGN);
++      OffsetRgn(VisRgn,-pt0.x,-pt0.y);
++	   if (CombineRgn(UpdRgn,UpdRgn,VisRgn,RGN_AND) != NULLREGION)
++	   {
++	     size = GetRegionData(UpdRgn,0,NULL);
++        if (!size)
++        {
++          DeleteObject(UpdRgn);
++          DeleteObject(VisRgn);
++          break;
++        }
++        data = malloc(size);
++        GetRegionData(UpdRgn,size,data);
++      
++        //#define DIMBOR
++        #ifdef DIMBOR
++          ErrorF ("  WM_PAINT - pWin: [%08x], hWnd [%08x], nCount=%d, wParam [%08x]\n",pWin,hwnd,data->rdh.nCount,wParam);
++        #endif
+ 
+-	  /* Display a fancy error message */
+-	  FormatMessage (FORMAT_MESSAGE_ALLOCATE_BUFFER |
+-			 FORMAT_MESSAGE_FROM_SYSTEM |
+-			 FORMAT_MESSAGE_IGNORE_INSERTS,
+-			 NULL,
+-			 GetLastError (),
+-			 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
+-			 (LPTSTR) &lpMsgBuf,
+-			 0, NULL);
+-
+-	  ErrorF ("winTopLevelWindowProc - BitBlt failed: %s\n",
+-		  (LPSTR)lpMsgBuf);
+-	  LocalFree (lpMsgBuf);
+-	}
++        for (i = 0, rc0=(RECT *)data->Buffer; i<data->rdh.nCount;i++,rc0++)
++        {
++          iX = rc0->left; iY = rc0->top;
++          /* Try to copy from the shadow buffer */
++          if (!BitBlt (hdcUpdate,
++   		      iX,iY,
++   		      rc0->right - rc0->left, rc0->bottom - rc0->top,
++   		      s_pScreenPriv->hdcShadow,
++   		      rc0->left+pt0.x-s_pScreenInfo->dwXOffset, rc0->top+pt0.y-s_pScreenInfo->dwYOffset,
++   		      SRCCOPY))
++   	    {
++   	       LPVOID lpMsgBuf;
++   	       /* Display a fancy error message */
++   	       FormatMessage (FORMAT_MESSAGE_ALLOCATE_BUFFER |
++         	                FORMAT_MESSAGE_FROM_SYSTEM |
++				                FORMAT_MESSAGE_IGNORE_INSERTS,
++				                NULL,GetLastError(),
++				                MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT), // Default language
++				                (LPTSTR) &lpMsgBuf,0,NULL);
++		       ErrorF ("winTopLevelWindowProc - BitBlt failed: %s\n", (LPSTR)lpMsgBuf);
++		       LocalFree (lpMsgBuf);
++		     }
++	      }
++      }
++        /* EndPaint frees the DC */
++      EndPaint (hwnd, &ps);
++      DeleteObject(UpdRgn);
++   	DeleteObject(VisRgn);
++      free(data);
++
++      /* dynamic update of window title */
++		winUpdateWindowName(pWin);
++/* ----------- End of addition by dimbor ------------------------------------------- */
+ 
+-      /* EndPaint frees the DC */
+-      EndPaint (hwndScreen, &ps);
+       return 0;
+ 
+ 
+@@ -982,6 +1741,14 @@
+           ShowCursor (TRUE);
+         }
+ */
++
++	   /* by dimbor - catch drags on fake-title */
++      POINT ptM;
++      ptM.x = GET_X_LPARAM(lParam);
++      ptM.y = GET_Y_LPARAM(lParam);
++      if((wParam&MK_LBUTTON) && ptInFakeTitle(pWin,&ptM))
++         break;
++
+       /* Deliver absolute cursor position to X Server */
+ 
+       miPointerAbsoluteCursor (ptMouse.x - GetSystemMetrics(SM_XVIRTUALSCREEN) -
+@@ -994,6 +1761,14 @@
+      {
+        extern  void nxwinLostFocus();
+ 
++       /* by dimbor (from winwndproc.c) */
++      if (!s_pScreenPriv || !pWin || !pWinPriv)
++        break;
++      if (pWinPriv->fXKilled)
++        break;
++       /* Store the state of all mode keys */
++       winStoreModeKeyStates (s_pScreen);
++
+        winKeybdReleaseKeys();
+ 
+        nxwinLostFocus();
+@@ -1003,6 +1778,11 @@
+      {
+        extern void nxwinGotFocus(WPARAM wParam);
+        nxwinGotFocus(wParam);
++
++       /* by dimbor (from winwndproc.c) */
++       /* Restore the state of all mode keys */
++       winRestoreModeKeyStates (s_pScreen);
++
+        return 0; 
+      } 
+      case WM_NCMOUSEMOVE:
+@@ -1043,6 +1823,20 @@
+ 	}
+       return 0;
+ 
++/* by dimbor - catch drags on fake-title */
++#ifdef MOVE_MAGIC
++    case WM_NCLBUTTONDOWN:
++      if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
++	break;
++	   
++      if(bNeedActivate)
++      {
++        bNeedActivate=FALSE;
++        winMouseButtonsHandle (s_pScreen, ButtonPress, Button1, wParam);
++        winMouseButtonsHandle (s_pScreen, ButtonRelease, Button1, wParam);
++      }
++	break;
++#endif
+     case WM_LBUTTONDBLCLK:
+     case WM_LBUTTONDOWN:
+       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
+@@ -1153,7 +1947,7 @@
+       return 0;
+ 
+ 
+-#if 1
++#if 0 /* switch off by dimbor */
+     case WM_ACTIVATE:
+ #if CYGMULTIWINDOW_DEBUG
+       ErrorF ("winTopLevelWindowProc - WM_ACTIVATE\n");
+@@ -1227,9 +2021,15 @@
+ 	}
+       else
+ 	{
+-	  /* Tell our Window Manager thread to kill the window */
+-	  wmMsg.msg = WM_WM_KILL;
+-	  winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++    	/*
++    	 * If we find a windows which has WM_TRANSIENT_FOR property
++    	 * set to this windows, such a windows must be killed delicate. (by dimbor)
++    	 */
++    	if (pWin)
++    	   Cmd2TransientWindows(s_pScreenPriv->pWMInfo,pWin,TRUE,WM_WM_KILL);
++    	/* Tell our Window Manager thread to kill the window */
++    	wmMsg.msg = WM_WM_KILL;
++    	winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
+ 	}
+       return 0;
+ 
+@@ -1257,9 +2057,16 @@
+ #endif
+ 
+       /* Bail if Windows window is not actually moving */
+-      if (pWinPriv->iX == (short) LOWORD(lParam)
+-	  && pWinPriv->iY == (short) HIWORD(lParam))
+-	break;
++      if (pWinPriv->iX+s_pScreenInfo->dwXOffset == (short) LOWORD(lParam)
++      	  && pWinPriv->iY+s_pScreenInfo->dwYOffset == (short) HIWORD(lParam))
++			  break;
++
++      /*
++       * by dimbor don't send cretinous minimized position to X
++       * because it be surprised
++       */
++      if ((short) LOWORD(lParam) == -32000 && (short) HIWORD(lParam) == -32000)
++       	break;
+ 
+       /* Also bail if we're maximizing, we'll do the whole thing in WM_SIZE */
+       {
+@@ -1275,19 +2082,52 @@
+           break;
+       }
+ 
+-      /* Get new position */
+-      pWinPriv->iX = (short) LOWORD(lParam);
+-      pWinPriv->iY = (short) HIWORD(lParam);
++      /* Get new position - chg by dimbor */
++      pWinPriv->iX = (short) LOWORD(lParam)-s_pScreenInfo->dwXOffset;
++      pWinPriv->iY = (short) HIWORD(lParam)-s_pScreenInfo->dwYOffset;
+ 
+ #if CYGMULTIWINDOW_DEBUG
+       ErrorF ("\t(%d, %d)\n", pWinPriv->iX, pWinPriv->iY);
+ #endif
+ 
+       winMoveXWindow (pWin,
+-                      (LOWORD(lParam) - wBorderWidth (pWin)
+-                       - GetSystemMetrics (SM_XVIRTUALSCREEN)),
+-                      (HIWORD(lParam) - wBorderWidth (pWin)
++                      (pWinPriv->iX - wBorderWidth (pWin)
++                        - GetSystemMetrics (SM_XVIRTUALSCREEN)),
++                      (pWinPriv->iY - wBorderWidth (pWin)
+                        - GetSystemMetrics (SM_YVIRTUALSCREEN)));
++
++     /* chg by dimbor
++      * If we find a windows which has WM_TRANSIENT_FOR property
++      * set to this windows, such a windows must be killed except
++      * windows with Status == 2
++      * I still try to prevent moving and resizing window, if some
++      * others transients are live
++      */
++      if (pWin)
++      {
++         CountSibls = winGetTransients(pWin,Sibls);
++         CurSibl=Sibls;
++         for (i=0;i<CountSibls;i++)
++         {
++           if(GetWinStyles(*CurSibl,&dwSt,&dwExSt) != 2)
++             if(GetWinStyles(*CurSibl,&dwSt,&dwExSt) < 2)
++             {
++               winWMMessageRec	wmMsg2;
++               wmMsg2.pWin= *CurSibl;
++               wmMsg2.hwndWindow= winGetWindowPriv(*CurSibl)->hWnd;
++               wmMsg2.iWindow=(Window)GetProp (wmMsg2.hwndWindow, WIN_WID_PROP);
++               wmMsg2.msg = WM_WM_KILL;
++               winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg2);
++               //winUnmapWindowMultiWindow(*CurSibl);
++             }
++             CurSibl++;
++         }
++      }
++
++      /* Update wholly window (by dimbor) */
++      InvalidateRect(hwnd,NULL,FALSE);
++      UpdateWindow(hwnd);
++
+       return 0;
+ 
+     case WM_SHOWWINDOW:
+@@ -1298,78 +2138,47 @@
+       if (!wParam)
+ 	return 0;
+ 
+-      /* Tell X to map the window */
+-      MapWindow (pWin, wClient(pWin));
++
++      dwStWin = GetWinStyles(pWin,&dwSt,&dwExSt);
++      BOOL InParent = ContainsInParent(pWin);
+ 
+       /* */
+-      if (!pWin->overrideRedirect)
+-	{
+-	  DWORD		dwExStyle;
+-	  DWORD		dwStyle;
+-	  RECT		rcNew;
+-	  int		iDx, iDy;
+ 
++      if ((!pWin->overrideRedirect && (dwStWin<3 || !InParent))
++           ||(pWin->overrideRedirect && !winIsTransientForWindow(pWin) && dwStWin==3))
++	{
++     /* Tell X to map the window */
++     MapWindow (pWin, wClient(pWin));
+ 	  /* Flag that this window needs to be made active when clicked */
+-	  SetProp (hwnd, WIN_NEEDMANAGE_PROP, (HANDLE) 1);
+-
+-	  /* Get the standard and extended window style information */
+-	  dwExStyle = GetWindowLongPtr (hwnd, GWL_EXSTYLE);
+-	  dwStyle = GetWindowLongPtr (hwnd, GWL_STYLE);
++     SetProp (hwnd, WIN_NEEDMANAGE_PROP, (HANDLE) 1);
+ 
+-	  /* */
+-	  if (dwExStyle != WS_EX_APPWINDOW)
+-	    {
+-	      /* Setup a rectangle with the X window position and size */
+-	      SetRect (&rcNew,
+-		       pWinPriv->iX,
+-		       pWinPriv->iY,
+-		       pWinPriv->iX + pWinPriv->iWidth,
+-		       pWinPriv->iY + pWinPriv->iHeight);
+-
+-#if 0
+-	      ErrorF ("winTopLevelWindowProc - (%d, %d)-(%d, %d)\n",
+-		      rcNew.left, rcNew.top,
+-		      rcNew.right, rcNew.bottom);
+-#endif
+-
+-	      /* */
+-	      AdjustWindowRectEx (&rcNew,
+-				  WS_POPUP | WS_SIZEBOX | WS_OVERLAPPEDWINDOW,
+-				  FALSE,
+-				  WS_EX_APPWINDOW);
+-
+-	      /* Calculate position deltas */
+-	      iDx = pWinPriv->iX - rcNew.left;
+-	      iDy = pWinPriv->iY - rcNew.top;
+-
+-	      /* Calculate new rectangle */
+-	      rcNew.left += iDx;
+-	      rcNew.right += iDx;
+-	      rcNew.top += iDy;
+-	      rcNew.bottom += iDy;
+-
+-#if 0
+-	      ErrorF ("winTopLevelWindowProc - (%d, %d)-(%d, %d)\n",
+-		      rcNew.left, rcNew.top,
+-		      rcNew.right, rcNew.bottom);
+-#endif
+-
+-	      /* Set the window extended style flags */
+-	      SetWindowLongPtr (hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
+-
+-	      /* Set the window standard style flags */
+-	      SetWindowLongPtr (hwnd, GWL_STYLE, WS_POPUP | WS_SIZEBOX | WS_OVERLAPPEDWINDOW);
+-
+-	      /* Positon the Windows window */
+-	      SetWindowPos (hwnd, HWND_TOP,
+-			    rcNew.left, rcNew.top,
+-			    rcNew.right - rcNew.left, rcNew.bottom - rcNew.top,
+-			    SWP_NOMOVE | SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+-
+-	      /* Bring the Window window to the foreground */
+-	      SetForegroundWindow (hwnd);
+-	    }
+-	}
++     if (dwStWin<3)
++     {
++       if(bOpenMaximized)
++       {
++         //ErrorF("Show Maximized\n");
++
++         pWinPriv->fNeedRestore=FALSE;
++         pWinPriv->iX=pWin->drawable.x;
++         pWinPriv->iY=pWin->drawable.y;
++         WINDOWPLACEMENT windPlace;
++         windPlace.length = sizeof(WINDOWPLACEMENT);
++         GetWindowPlacement(hwnd, &windPlace);
++         windPlace.showCmd = SW_SHOWMAXIMIZED;
++         SetWindowPlacement(hwnd, &windPlace);
++         bOpenMaximized=FALSE;
++       }
++       else
++         SetWindowPos (hwnd, HWND_TOP,0,0,0,0,
++                       SWP_NOSIZE |SWP_NOMOVE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
++	    /* Bring the Window window to the foreground */
++       SetForegroundWindow (hwnd);
++     }
++     else
++     {
++	    SetWindowPos (hwnd, HWND_TOP,0,0,0,0,
++	                  SWP_NOSIZE |SWP_NOMOVE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
++	  }
+ 
+       /* Setup the Window Manager message */
+       wmMsg.msg = WM_WM_MAP;
+@@ -1384,8 +2193,67 @@
+ 
+       /* Tell our Window Manager thread to raise the window */
+       winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++	}
+       return 0;
+ 
++  	/* by dimbor - catching bad win-commands :) */
++	case WM_SYSCOMMAND:
++	{
++	  switch (wParam & 0xfff0)
++	  {
++	  case SC_MINIMIZE:
++	  case SC_MAXIMIZE:
++	  case SC_RESTORE:
++	    if (!pWin)
++	    	break;
++	    dwStWin=GetWinStyles(pWin,&dwSt,&dwExSt);
++	    if ( dwStWin > 1 )
++	    	return 0;
++	    WindowPtr pSibl=winGetTransientForWindow(pWin);
++	    if (!pSibl)
++	      break;
++	    if (GetWinStyles(pSibl,&dwSt,&dwExSt) > 0)
++	    {
++	    	/* prevent to change, if some children are active */
++	    	return 0;
++	    }
++	    break;
++	  case SC_SIZE:
++	  case SC_MOVE:
++	    if (pWin == NULL)
++	    	break;
++	    dwStWin=GetWinStyles(pWin,&dwSt,&dwExSt);
++	    if ( dwStWin == 3 )
++	    	return 0;
++	    CountSibls = winGetTransients(pWin,Sibls);
++	    CurSibl=Sibls;
++	    for (i=0;i<CountSibls;i++)
++	    {
++	    	if(GetWinStyles(*CurSibl,&dwSt,&dwExSt) != 2)
++	    	//if(GetWinStyles(*CurSibl,&dwSt,&dwExSt) < 2)
++	        return 0;
++	    	CurSibl++;
++	    }
++	  default:
++	    break;
++	  }
++      break;
++	}
++#ifdef MOVE_MAGIC
++    case WM_NCHITTEST:
++    {
++     if(hwnd)
++     {
++       POINT ptM; ptM.x=LOWORD(lParam); ptM.y=HIWORD(lParam);
++       MapWindowPoints(GetDesktopWindow(),hwnd,&ptM,1);
++       if(bNeedActivate=ptInFakeTitle(pWin,&ptM))
++         return HTCAPTION;
++     }
++     break;
++    }
++#endif
++/* --------------- End of changes by dimbor --------------------------------- */
++
+     case WM_SIZE:
+       /* see dix/window.c */
+ #if CYGMULTIWINDOW_DEBUG
+@@ -1396,36 +2264,35 @@
+       switch (wParam)
+ 	{
+ 	case SIZE_MINIMIZED:
++	{
+ #if CYGMULTIWINDOW_DEBUG
+ 	  ErrorF ("\tSIZE_MINIMIZED\n");
+ #endif
+ 
+-	  wmMsg.msg = WM_WM_LOWER;
+-
+-	  /* Tell our Window Manager thread to lower the window */
+-	  winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
+-
+-          /*
+-           * If this window has WM_TRANSIENT_FOR property, also the window
+-           * that WM_TRANSIENT_FOR is set to must be minimized.
+-           */
+-
+-          WindowPtr pW;
+-          pW = winIsTransientForWindow(pWin);
+-
+-          if (pW)
+-          {
+-            WINDOWPLACEMENT windPlace;
+-            windPlace.length = sizeof(WINDOWPLACEMENT);
+-
+-            GetWindowPlacement(winGetWindowPriv(pW)->hWnd, &windPlace);
+-
+-            windPlace.showCmd = SW_MINIMIZE;
+-            SetWindowPlacement(winGetWindowPriv(pW)->hWnd, &windPlace);
+-          }
+-
+-	  break;
+-
++	     WindowPtr pW;
++	    /*
++	     * If this window has WM_TRANSIENT_FOR property, the window
++	     * must be killed (chg by dimbor).
++	     */
++	     pW = winIsTransientForWindow(pWin);
++	     if (pW)
++	       {
++				wmMsg.msg = WM_WM_KILL;
++		  		winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++		  		return 0;
++	        }
++	     /*
++	      * If we find windows which has WM_TRANSIENT_FOR property
++	      * set to this windows, such a windows must be killed delicate. (by dimbor)
++	      */
++	      if (pWin)
++	        Cmd2TransientWindows(s_pScreenPriv->pWMInfo,pWin,TRUE,WM_WM_KILL);
++
++		  wmMsg.msg = WM_WM_LOWER;
++		  /* Tell our Window Manager thread to lower the window */
++		  winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++		  break;
++	}
+ 	case SIZE_RESTORED:
+ 	case SIZE_MAXIMIZED:
+ #if CYGMULTIWINDOW_DEBUG
+@@ -1473,46 +2340,64 @@
+ 	   */
+ 	  if (wParam == SIZE_MAXIMIZED)
+ 	    {
+-	      POINT		ptHome;
+-
+-	      /* Flag that we are being maximized and store info for restore */
+-	      pWinPriv->fNeedRestore = TRUE;
+-	      pWinPriv->ptRestore.x = pWinPriv->iX;
+-	      pWinPriv->ptRestore.y = pWinPriv->iY;
+-	     
+-	      /* Get screen location of window root */
+-	      ptHome.x = 0;
+-	      ptHome.y = 0;
+-	      ClientToScreen (hwnd, &ptHome);
+-
+-	      /* Map from screen (-X,-Y) to (0,0) root coords */
+-	      winMoveXWindow (pWin,
+-			      ptHome.x - wBorderWidth (pWin)
+-			      - GetSystemMetrics (SM_XVIRTUALSCREEN),
+-			      ptHome.y - wBorderWidth (pWin)
+-			      - GetSystemMetrics (SM_YVIRTUALSCREEN));
+-	    }
+-	  else if (wParam == SIZE_RESTORED && pWinPriv->fNeedRestore)
+-	    {
+-	      /* If need restore and !maximized then move to cached position */
+-	      WINDOWPLACEMENT windPlace;
+-
+-	      windPlace.length = sizeof (WINDOWPLACEMENT);
+-
+-	      GetWindowPlacement (hwnd, &windPlace);
+-
+-	      if (windPlace.showCmd != SW_MAXIMIZE
+-		  && windPlace.showCmd != SW_SHOWMAXIMIZED)
+-		{
+-		  pWinPriv->fNeedRestore = FALSE;
+-		  winMoveXWindow (pWin,
+-				  pWinPriv->ptRestore.x  - wBorderWidth (pWin)
+-				  - GetSystemMetrics (SM_XVIRTUALSCREEN),
+-				  pWinPriv->ptRestore.y - wBorderWidth (pWin)
+-				  - GetSystemMetrics (SM_YVIRTUALSCREEN));
++	       WindowPtr pW;
++	       pW = winIsTransientForWindow(pWin);
++	       if (pW)
++	       {
++	         /* It's auxiliary window - beter candidate to deceased (by dimbor) */
++	         wmMsg.msg = WM_WM_KILL;
++	         winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++	         return 0;
++	       }
++	       POINT		ptHome;
++
++		    /* Flag that we are being maximized and store info for restore */
++		    pWinPriv->fNeedRestore = TRUE;
++		    pWinPriv->ptRestore.x = pWinPriv->iX;
++		    pWinPriv->ptRestore.y = pWinPriv->iY;
++	       /* Get screen location of window root */
++		    ptHome.x = 0;
++		    ptHome.y = 0;
++		    ClientToScreen (hwnd, &ptHome);
++	       /* Map from screen (-X,-Y) to (0,0) root coords */
++		    winMoveXWindow (pWin,
++		                    ptHome.x - s_pScreenInfo->dwXOffset - wBorderWidth (pWin)
++				                 - GetSystemMetrics (SM_XVIRTUALSCREEN),
++				              ptHome.y - s_pScreenInfo->dwYOffset - wBorderWidth (pWin)
++				                 - GetSystemMetrics (SM_YVIRTUALSCREEN));
++	     }
++	    /* corr by dimbor */
++		  else if (wParam == SIZE_RESTORED)
++		 {
++	       if (pWinPriv->fNeedRestore)
++	       {
++	    	   /* If need restore and !maximized then move to cached position */
++	    	   WINDOWPLACEMENT windPlace;
++	    	   windPlace.length = sizeof (WINDOWPLACEMENT);
++	    	   GetWindowPlacement (hwnd, &windPlace);
++	    	   if (windPlace.showCmd != SW_MAXIMIZE
++				   && windPlace.showCmd != SW_SHOWMAXIMIZED)
++	    	   {
++				 pWinPriv->fNeedRestore = FALSE;
++			     winMoveXWindow (pWin,
++						  pWinPriv->ptRestore.x - wBorderWidth (pWin)
++						  - GetSystemMetrics (SM_XVIRTUALSCREEN),
++						  pWinPriv->ptRestore.y - wBorderWidth (pWin)
++						  - GetSystemMetrics (SM_YVIRTUALSCREEN));
++			   }
++		   }
++	       else /* for restore after suspend by dimbor */
++		   {
++		     winMoveXWindow (pWin, pWinPriv->iX, pWinPriv->iY);
++		   }
+ 		}
+-	    }
+ 
++     /*
++      * by dimbor - don't send cretinous minimized sizes to X
++      * because it be surprised
++      */
++	  if(wParam==SIZE_MINIMIZED)
++		  break;
+ 	  /* Perform the resize and notify the X client */
+ 	  winResizeXWindow (pWin,
+ 			    (short) LOWORD(lParam),
+@@ -1531,32 +2416,108 @@
+ #endif
+ 
+       /*
+-       * Avoid restack if we find a window which has
+-       * WM_TRANSIENT_FOR property set to this window.
++       * add by dimbor
++       * Avoid restack if we find a child windows which has
++       * WM_TRANSIENT_FOR property set to this window
++       * except windows with Status == 2.
+        */
++       CountSibls = winGetTransients(pWin,Sibls);
++       CurSibl=Sibls;
++       SetWindowPos(pWinPriv->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
++       for (i=0;i<CountSibls;i++)
++       {
++         dwStWin=GetWinStyles(*CurSibl,&dwSt,&dwExSt);
++         if(dwStWin != 2)
++         {
++           SetWindowPos(winGetWindowPriv(*CurSibl)->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
++           return MA_NOACTIVATEANDEAT;
++         }
++         CurSibl++;
++       }
++      /* Check if this window needs to be made active when clicked */
++      if (!GetProp (pWinPriv->hWnd, WIN_NEEDMANAGE_PROP))
++	{
++	  /* */
++	  return MA_NOACTIVATE;
++	}
++/*
++	else
++	{
++     wmMsg.msg = WM_WM_ACTIVATE;
++     winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++	}
++*/
++   break;
++
++    case WM_ACTIVATE:
++      /* Pass the message to the root window */
++      SendMessage (hwndScreen, message, wParam, lParam);
++
++      /* Bail if inactivating */
++      if (LOWORD(wParam) == WA_INACTIVE)
++	return 0;
+ 
+-      transientForWin = (WindowPtr) winGetTransientForWindow(pWin);
++      WindowPtr pAc=NULL;
++      if(GetWinStyles(pWin,&dwSt,&dwExSt) != 3)
++      {
++        wmMsg.msg = WM_WM_RAISE;
++        winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++      }
+ 
+-      if (transientForWin)
++      /* Check if the current window is the active window in Windows */
++      if (GetActiveWindow () == hwnd)
+       {
+-        SetWindowPos(pWinPriv->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
++        /*
++         * chg by dimbor
++         * Avoid restack if we find a window which has
++         * WM_TRANSIENT_FOR property set to this window
++         * except windows with Status == 2.
++         */
++        winWMMessageRec	wmMsg2;
++        CountSibls = winGetTransients(pWin,Sibls);
++        CurSibl=Sibls;
++        for (i=0;i<CountSibls;i++)
++        {
++          if( ((winGetWindowPriv(*CurSibl)) -> fXKilled) == 0 &&
++              ((winGetWindowPriv(pWin)) -> fXKilled) == 0)
++          {
++            dwStWin=GetWinStyles(*CurSibl,&dwSt,&dwExSt);
++            wmMsg2.pWin= *CurSibl;
++	         wmMsg2.hwndWindow= winGetWindowPriv(*CurSibl)->hWnd;
++            wmMsg2.iWindow=(Window)GetProp (wmMsg2.hwndWindow, WIN_WID_PROP);
++            if(dwStWin == 2)
++            {
++              pAc=*CurSibl;
++//              PrintStacks(pAc,FALSE,"before");
+ 
+-        SetWindowPos(winGetWindowPriv(transientForWin)->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
++              wmMsg2.msg = WM_WM_RAISE;
++              winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg2);
+ 
+-        return MA_NOACTIVATEANDEAT;
++              SetWindowPos(winGetWindowPriv(*CurSibl)->hWnd, HWND_TOP, 0, 0, 0, 0,
++                           SWP_NOSIZE |SWP_NOMOVE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
++            }
++            else
++              SetWindowPos(winGetWindowPriv(*CurSibl)->hWnd, HWND_TOP, 0, 0, 0, 0,
++                           SWP_NOMOVE | SWP_NOSIZE);
++          }
++            CurSibl++;
++        }
+       }
+ 
+-      /* Check if this window needs to be made active when clicked */
+-      if (!GetProp (pWinPriv->hWnd, WIN_NEEDMANAGE_PROP))
+-	{
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("winTopLevelWindowProc - WM_MOUSEACTIVATE - MA_NOACTIVATE\n");
+-#endif
++      if(GetWinStyles(pWin,&dwSt,&dwExSt) != 3)
++      {
++        /* Tell our Window Manager thread to activate the window */
++        wmMsg.msg = WM_WM_ACTIVATE;
++        winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
++      }
++      return 0;
+ 
+-	  /* */
+-	  return MA_NOACTIVATE;
+-	}
+-      break;
++    case WM_ACTIVATEAPP:
++
++      /* Pass the message to the root window */
++      SendMessage (hwndScreen, message, wParam, lParam);
++      return 0;
++/* --------------- End of adds by dimbor --------------------------------- */
+ 
+     case WM_TIMER:
+ #if CYGMULTIWINDOW_DEBUG
+@@ -1571,9 +2532,9 @@
+ 	  /* Get the current position of the mouse cursor */
+ 	  GetCursorPos (&point);
+ 
+-	  /* Deliver absolute cursor position to X Server */
+-	  miPointerAbsoluteCursor (point.x - GetSystemMetrics(SM_XVIRTUALSCREEN),
+-				   point.y - GetSystemMetrics(SM_YVIRTUALSCREEN),
++	  /* Deliver absolute cursor position to X Server (chg by dimbor)*/
++	  miPointerAbsoluteCursor (point.x-s_pScreenInfo->dwXOffset,
++	                           point.y-s_pScreenInfo->dwYOffset,
+ 				   g_c32LastInputEventTime = GetTickCount ());
+ 	}
+       else
+@@ -1597,102 +2558,184 @@
+ static void
+ winCreateWindowsWindow (WindowPtr pWin)
+ {
+-  int                   iX, iY;
+-  int			iWidth;
+-  int			iHeight;
+-  int                   iBorder;
+-  HWND			hWnd;
+-  WNDCLASS		wc;
+-  winWindowPriv(pWin);
+-  HICON                 hIcon;
+-  char                  pszClass[CLASS_NAME_LENGTH], pszWindowID[12];
+-  char                  *res_name, *res_class, *res_role;
+-  static int            s_iWindowID = 0;
++	  int                   iBorder;
++	  HWND			hWnd;
++	  WNDCLASS		wc;
++	  winWindowPriv(pWin);
++	  HICON                 hIcon;
++	  char                  pszClass[CLASS_NAME_LENGTH], pszWindowID[12];
++	  char                  *res_name, *res_class, *res_role;
++	  static int            s_iWindowID = 0;
++
++	#if CYGMULTIWINDOW_DEBUG
++	  ErrorF ("winCreateWindowsWindow - pWin: %08x\n", pWin);
++	#endif
+ 
+-#if CYGMULTIWINDOW_DEBUG
+-  ErrorF ("winCreateWindowsWindow - pWin: %08x\n", pWin);
+-#endif
+-
+-  hIcon = privLoadIcon(pWin);
++	  hIcon = privLoadIcon(pWin);
+ 
+-  /* Set standard class name prefix so we can identify window easily */
+-  strncpy (pszClass, WINDOW_CLASS_X, strlen (WINDOW_CLASS_X));
++	  /* Set standard class name prefix so we can identify window easily */
++	  strncpy (pszClass, WINDOW_CLASS_X, strlen (WINDOW_CLASS_X));
+ 
+-  if (GetClassHint (pWin, &res_name, &res_class))
+-    {
+-      strncat (pszClass, "-", 1);
+-      strncat (pszClass, res_name, CLASS_NAME_LENGTH - strlen (pszClass));
+-      strncat (pszClass, "-", 1);
+-      strncat (pszClass, res_class, CLASS_NAME_LENGTH - strlen (pszClass));
++	  if (GetClassHint (pWin, &res_name, &res_class))
++	    {
+ 
+-      /* Check if a window class is provided by the WM_WINDOW_ROLE property,
+- *     * if not use the WM_CLASS information.
+- *     * For further information see:
+- *     * http://tronche.com/gui/x/icccm/sec-5.html
+- *     */
++	//ErrorF ("winCreateWindowsWindow - pWin: [%p], name [%s], class [%s]\n", pWin,res_name,res_class);
+ 
+-      if (GetWindowRole (pWin, &res_role) )
+-        {
+-          strcat (pszClass, "-");
+-          strcat (pszClass, res_role);
+-          free (res_role);
+-        }
++	      strncat (pszClass, "-", 1);
++	      strncat (pszClass, res_name, CLASS_NAME_LENGTH - strlen (pszClass));
++	      strncat (pszClass, "-", 1);
++	      strncat (pszClass, res_class, CLASS_NAME_LENGTH - strlen (pszClass));
++
++	      /* Check if a window class is provided by the WM_WINDOW_ROLE property,
++	      * if not use the WM_CLASS information.
++	      * For further information see:
++	      * http://tronche.com/gui/x/icccm/sec-5.html
++	      */
++
++	      if (GetWindowRole (pWin, &res_role) )
++	        {
++	          strcat (pszClass, "-");
++	          strcat (pszClass, res_role);
++	          free (res_role);
++	        }
+ 
+-      free (res_name);
+-      free (res_class);
+-    }
+-
+-  /* Add incrementing window ID to make unique class name */
+-  sprintf (pszWindowID, "-%x", s_iWindowID++);
+-  strcat (pszClass, pszWindowID);
++	      free (res_name);
++	      free (res_class);
++	    }
+ 
+-  iBorder = wBorderWidth (pWin);
++	  /* Add incrementing window ID to make unique class name */
++	  sprintf (pszWindowID, "-%x", s_iWindowID++);
++	  strcat (pszClass, pszWindowID);
++	  iBorder = wBorderWidth (pWin);
++
++
++	  /* Setup our window class */
++	  wc.style = 0;
++	  wc.lpfnWndProc = winTopLevelWindowProc;
++	  wc.cbClsExtra = 0;
++	  wc.cbWndExtra = 0;
++	  wc.hInstance = g_hInstance;
++	  wc.hIcon = hIcon; //LoadIcon (g_hInstance, MAKEINTRESOURCE(IDI_ICON2));
++	  wc.hCursor = 0;
++	  wc.hbrBackground = (HBRUSH) GetStockObject(NULL_BRUSH);
++	  wc.lpszMenuName = NULL;
++	  wc.lpszClassName = pszClass; //WINDOW_CLASS_X;
++	  RegisterClass (&wc);
++
++	  /* add by dimbor */
++
++	  bOpenMaximized=FALSE;
++
++	  DWORD dwStyle,dwExStyle;
++	  DWORD dwStWin=GetWinStyles(pWin,&dwStyle,&dwExStyle);
++
++	  /* it's not correct, but i'm lazy :) */
++	  winPrivScreenPtr s_pScreenPriv = pWinPriv->pScreenPriv;
++	  WHandlers[0] = s_pScreenPriv->hwndScreen;
++	  winScreenInfo *s_pScreenInfo = s_pScreenPriv->pScreenInfo;
+ 
+-  iX = pWin->drawable.x + GetSystemMetrics(SM_XVIRTUALSCREEN);
+-  iY = pWin->drawable.y + GetSystemMetrics(SM_YVIRTUALSCREEN);
++	  RECT		rcNew;
++	  SetRect (&rcNew,pWin->drawable.x,pWin->drawable.y,
++	            pWin->drawable.x+pWin->drawable.width,
++	            pWin->drawable.y+pWin->drawable.height);
++
++
++	  AdjustWindowRectEx (&rcNew,dwStyle,FALSE,dwExStyle);
++	  OffsetRect(&rcNew,s_pScreenInfo->dwXOffset,s_pScreenInfo->dwYOffset);
++	  int iWidth=rcNew.right-rcNew.left;
++	  int iHeight=rcNew.bottom-rcNew.top;
++
++	  /* temporary solution for positioning of some windows
++	     - title bar (if exist) could always be visible - attempt to center window */
++	  if (dwStyle & WS_CAPTION)
++	  {
++	    RECT rcScr;
++	    GetClientRect(s_pScreenPriv->hwndScreen,&rcScr);
++	    OffsetRect(&rcScr,s_pScreenInfo->dwXOffset,s_pScreenInfo->dwYOffset);
++	    int iScrW=rcScr.right-rcScr.left;
++	    int iScrH=rcScr.bottom-rcScr.top;
++
++	    int dx=rcNew.left+GetSystemMetrics(SM_CXSIZEFRAME)+1-rcScr.left;
++	    int dy=rcNew.top+GetSystemMetrics(SM_CYSIZEFRAME)+1-rcScr.top;
++	//ErrorF("%d.%d -> %d.%d\n",rcNew.left,rcNew.top,dx,dy);
++
++	    extern ATOM _NET_WM_NAME;
++	    if(GetWinProp(pWin,_NET_WM_NAME) && dwStWin==0)
++	      bOpenMaximized=IsWinMaximized(pWin,dwStyle,dwExStyle);
++	    else if(dwStWin==0)
++	      bOpenMaximized= (iWidth>iScrW) && (iHeight>iScrH);
++
++	    POINT dP;
++	    //dP.x=0; dP.y=0;
++	    if (dx < 0 || dy < 0 || bOpenMaximized)
++	    {
+ 
+-  iWidth = pWin->drawable.width;
+-  iHeight = pWin->drawable.height;
++	      dP.x=iScrW >> 2;
++	      dP.y=iScrH >> 2;
++	      winMoveXWindow(pWin,dP.x-s_pScreenInfo->dwXOffset,dP.y-s_pScreenInfo->dwYOffset);
++
++	      int iSzW=(iScrW>>1)-GetSystemMetrics(SM_CXSIZEFRAME)*2;
++	      int iSzH=(iScrH>>1)-GetSystemMetrics(SM_CYSIZEFRAME)*2-GetSystemMetrics(SM_CYCAPTION);
++	      if(bOpenMaximized)
++	        winResizeXWindow(pWin,iSzW,iSzH);
++
++	      SetRect (&rcNew,pWin->drawable.x,pWin->drawable.y,
++	               pWin->drawable.x+pWin->drawable.width,
++	               pWin->drawable.y+pWin->drawable.height);
++	      AdjustWindowRectEx (&rcNew,dwStyle,FALSE,dwExStyle);
++	      OffsetRect(&rcNew,s_pScreenInfo->dwXOffset,s_pScreenInfo->dwYOffset);
++	      iWidth=rcNew.right-rcNew.left;
++	      iHeight=rcNew.bottom-rcNew.top;
++	    }
++	  }
+ 
+-  /* Setup our window class */
+-  wc.style = CS_HREDRAW | CS_VREDRAW;
+-  wc.lpfnWndProc = winTopLevelWindowProc;
+-  wc.cbClsExtra = 0;
+-  wc.cbWndExtra = 0;
+-  wc.hInstance = g_hInstance;
+-  wc.hIcon = hIcon; //LoadIcon (g_hInstance, MAKEINTRESOURCE(IDI_ICON2));
+-  wc.hCursor = 0;
+-  wc.hbrBackground = (HBRUSH) GetStockObject (WHITE_BRUSH);
+-  wc.lpszMenuName = NULL;
+-  wc.lpszClassName = pszClass; //WINDOW_CLASS_X;
+-  RegisterClass (&wc);
+-
+-  /* Create the window */
+-  hWnd = CreateWindowExA (WS_EX_TOOLWINDOW,			/* Extended styles */
+-			  pszClass, //WINDOW_CLASS_X,			/* Class name */
+-			  WINDOW_TITLE_X,			/* Window name */
+-			  WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+-			  iX,					/* Horizontal position */
+-			  iY,					/* Vertical position */
+-			  iWidth,				/* Right edge */
+-			  iHeight,				/* Bottom edge */
+-			  (HWND) NULL,				/* No parent or owner window */
+-			  (HMENU) NULL,				/* No menu */
+-			  GetModuleHandle (NULL),		/* Instance handle */
+-			  pWin);				/* ScreenPrivates */
+-  if (hWnd == NULL)
+-    {
+-      ErrorF ("winCreateWindowsWindow - CreateWindowExA () failed: %d\n",
+-	      GetLastError ());
+-    }
++	  /* by dimbor for "pseudo-MDI" window - do we need this??? */
++	  WindowPtr pPapa;
++	  HWND hwndPapa=NULL;
++	  if (dwStWin>0 && (pPapa=winIsTransientForWindow(pWin)))
++	  {
++	    if(winGetWindowPriv(pPapa)->hWnd)
++	    {
++	      hwndPapa=winGetWindowPriv(pPapa)->hWnd;
+ 
+-  pWinPriv->hWnd = hWnd;
++	    }
++	  }
++	  /* Create the window */
++	  hWnd = CreateWindowExA (dwExStyle,			/* Extended styles */
++				  pszClass, //WINDOW_CLASS_X,			/* Class name */
++				  WINDOW_TITLE_X,			/* Window name */
++				  dwStyle,
++				  rcNew.left,					/* Horizontal position */
++				  rcNew.top,					/* Vertical position */
++				  iWidth,				/* Right edge */
++				  iHeight,				/* Bottom edge */
++	           hwndPapa,
++				  (HMENU) NULL,				/* No menu */
++				  GetModuleHandle (NULL),		/* Instance handle */
++				  pWin);				/* ScreenPrivates */
+ 
++	  if (hWnd == NULL)
++	    {
++	      ErrorF ("winCreateWindowsWindow - CreateWindowExA () failed: %d\n",
++		      GetLastError ());
++	    }
++	  /* set window name by dimbor */
++	  extern void GetWindowNameW (void *, wchar_t **);
++	  wchar_t 	*pszWName=NULL;
++	  GetWindowNameW(pWin,&pszWName);
++	  if (pszWName)
++	  {
++		 SetWindowTextW(hWnd,pszWName);
++	    free (pszWName);
++	  }
++	  pWinPriv->hWnd = hWnd;
++	  SetProp (pWinPriv->hWnd, WIN_WID_PROP, (HANDLE) winGetWindowID(pWin));
+ 
+-  SetProp (pWinPriv->hWnd, WIN_WID_PROP, (HANDLE) winGetWindowID(pWin));
++	  /* by dimor */
++	  RenewWindowsHandles();
+ 
+-  /* Flag that this Windows window handles its own activation */
+-  SetProp (pWinPriv->hWnd, WIN_NEEDMANAGE_PROP, (HANDLE) 0);
++	  /* Flag that this Windows window handles its own activation */
++	  SetProp (pWinPriv->hWnd, WIN_NEEDMANAGE_PROP, (HANDLE) 0);
+ #if CYGMULTIWINDOW_DEBUG
+   ErrorF("Created Window : WindowID = %d\n",winGetWindowID(pWin));
+ #endif
+@@ -1721,6 +2764,10 @@
+   if (pWinPriv->hWnd == NULL)
+     return;
+ 
++  /* by dimbor (from winwndproc.c) */
++  /* Store the state of all mode keys */
++  winStoreModeKeyStates (pWin->drawable.pScreen);
++
+   SetProp (pWinPriv->hWnd, WIN_WINDOW_PROP, 0);
+ 
+ #ifdef NXWIN_MULTIWINDOW
+@@ -1763,7 +2810,8 @@
+           ErrorF("winDestroyWindowsWindow: pthread_mutex_unlock() after queue failed\n");
+ #endif
+ 
+-  DestroyWindow (pWinPriv->hWnd);
++     if (pWinPriv->hWnd)
++       DestroyWindow (pWinPriv->hWnd);
+ 
+   pWinPriv->hWnd = NULL;
+ 
+@@ -1779,6 +2827,8 @@
+        if(UnregisterClass(classname, GetModuleHandle(NULL)) == 0)
+             ErrorF("UnregisterClass failed\n");
+ 
++  /* by dimbor */
++  RenewWindowsHandles();
+ #if CYGMULTIWINDOW_DEBUG
+   ErrorF ("-winDestroyWindowsWindow\n");
+ #endif
+@@ -1811,11 +2861,13 @@
+ 	  assert (pWinPriv->hWnd != NULL);
+ 	}
+ 
+-      /* Display the window without activating it */
+-      ShowWindow (pWinPriv->hWnd, SW_SHOWNOACTIVATE);
+-
+-      /* Send first paint message */
+-      UpdateWindow (pWinPriv->hWnd);
++      if (pWinPriv->hWnd)
++      {
++        /* Display the window without activating it */
++        ShowWindow (pWinPriv->hWnd, SW_SHOWNOACTIVATE);
++        /* Send first paint message */
++        UpdateWindow (pWinPriv->hWnd);
++      }
+     }
+   else if (hWnd != NULL)
+     {
+@@ -2261,24 +3313,22 @@
+ 
+           /* If no icon is hinted, the default was the icon of a sibling window.
+            * Using the server icon seems more suitable.
+-           *
+-	   * else{
+-	   *         WindowPtr sibling = pWin;
+-           *
+-	   *         while( sibling && sibling->prevSib )
+-	   *       	  sibling = sibling->prevSib;
+-           *
+-	   *         while( sibling ){
+-	   *         	winWindowPriv(sibling);
+-           *
+-	   *       	if( pWinPriv->hWnd ){
+-	   *         		hIcon = (HICON)GetClassLong(pWinPriv->hWnd, GCL_HICON);
+-	   *       		break;
+-	   *       	}
+-	   *         	sibling = sibling->nextSib;
+-	   *         }
+-           * }
+            */
++	    else{
++	            WindowPtr sibling = pWin;
++	            while( sibling && sibling->prevSib )
++	          	  sibling = sibling->prevSib;
++
++	            while( sibling ){
++	            	winWindowPriv(sibling);
++
++	          	if( pWinPriv->hWnd ){
++	            		hIcon = (HICON)GetClassLong(pWinPriv->hWnd, GCL_HICON);
++	          		break;
++	          	}
++	            	sibling = sibling->nextSib;
++	            }
++            }
+ 
+       }	
+       if( hIcon == 0 )
+@@ -2290,16 +3340,17 @@
+ void
+ winUpdateWindowName(WindowPtr pWin)
+ {
+-  char *name;
++  /* by dimbor - changed name and type (unicode)*/
++  wchar_t *name;
+   winWindowPriv(pWin);
+ 
+   if (pWinPriv->hWnd != NULL)
+   {
+-    winGetWindowName(pWin, &name);
++    winGetWindowNameW(pWin, &name);
+ 
+     if (name != NULL)
+     {
+-      SetWindowText(pWinPriv->hWnd, name);
++      SetWindowTextW(pWinPriv->hWnd, name);
+ 
+       free(name);
+     }
+diff -u -P -x '*.[ao]' nxwin.orig/winmultiwindowwm.c nxwin/winmultiwindowwm.c
+--- nxwin.orig/winmultiwindowwm.c	2010-01-29 17:14:18.000000000 +0300
++++ nxwin/winmultiwindowwm.c	2010-05-28 07:04:46.796875000 +0400
+@@ -110,9 +110,7 @@
+ } WMMsgQueueRec, *WMMsgQueuePtr;
+ 
+ typedef struct _WMInfo {
+-/*
+   Display		*pDisplay;
+- */
+   WMMsgQueueRec		wmMsgQueue;
+   Atom			atmWmProtos;
+   Atom			atmWmDelete;
+@@ -164,9 +162,9 @@
+ static Bool
+ InitQueue (WMMsgQueuePtr pQueue);
+ 
+-static void
++void
+ /* FIXME: pWin is a WindowPtr */
+-GetWindowName (void *pWin, char **ppName);
++GetWindowNameW (void *pWin, wchar_t **ppWName);
+ 
+ static void*
+ winMultiWindowWMProc (void* pArg);
+@@ -186,6 +184,29 @@
+ 
+ static char nxwinWM_PROTOCOLS[]="WM_PROTOCOLS";
+ static char nxwinWM_DELETE[] = "WM_DELETE_WINDOW";
++/* add by dimbor */
++static char nxwinWM_TRANSIENT_FOR[] = "WM_TRANSIENT_FOR";
++static char nxwin_NET_WM_WINDOW_TYPE[] = "_NET_WM_WINDOW_TYPE";
++static char nxwin_NET_WM_WINDOW_TYPE_NORMAL[] = "_NET_WM_WINDOW_TYPE_NORMAL";
++static char nxwin_NET_WM_WINDOW_TYPE_DIALOG[] = "_NET_WM_WINDOW_TYPE_DIALOG";
++static char nxwin_NET_WM_WINDOW_TYPE_UTILITY[] = "_NET_WM_WINDOW_TYPE_UTILITY";
++static char nxwinWM_NORMAL_HINTS[]="WM_NORMAL_HINTS";
++static char nxwin_NET_WM_NAME[] = "_NET_WM_NAME";
++static char nxwin_NET_WM_PID[] = "_NET_WM_PID";
++static char nxwinWM_NAME[] = "WM_NAME";
++static char nxwinWM_STATE[] = "WM_STATE";
++
++ATOM WM_TRANSIENT_FOR;
++ATOM WM_NORMAL_HINTS;
++ATOM _MOTIF_WM_HINTS;
++ATOM _NET_WM_NAME;
++ATOM _NET_WM_PID;
++ATOM WM_NAME;
++ATOM WM_STATE;
++ATOM _NET_WM_WINDOW_TYPE;
++ATOM _NET_WM_WINDOW_TYPE_NORMAL;
++ATOM _NET_WM_WINDOW_TYPE_DIALOG;
++ATOM _NET_WM_WINDOW_TYPE_UTILITY;
+ /*
+  * PushMessage - Push a message onto the queue
+  */
+@@ -392,32 +413,34 @@
+   return TRUE;
+ }
+ 
+-
+ /*
+  * GetWindowName - 
+  */
+-static int 
+-privateGetWindowName(void *pWin, char **ppName, Atom atom)
++int 
++privateGetWindowName(void *pWin, char **ppName, Atom atom,Atom *retType)
+ {  
++/* chgs by dimbor */
+    int                   retFormat, retValue;
+    unsigned long         nItems, bytesLeft, origLen;
+    unsigned char         *strName;
+-   Atom                  retType;
+-   	
++      	
+    /* FIXME: look for memory leak */
+    if( (retValue = GetWindowProperty(pWin, atom, 0L, 0L, False,
+-                        AnyPropertyType, &retType, &retFormat, 
++                        AnyPropertyType, retType, &retFormat, 
+                         &nItems, &bytesLeft, (unsigned char**)NULL)) != Success){
+-       ErrorF("GetWindowName: GetWindowProperty failed\n");
+        return retValue; 
+    }
++   if (bytesLeft == 0)
++   {
++     *ppName=NULL;
++     return Success;
++   }
+    origLen = bytesLeft;
+    if( !( strName = malloc( bytesLeft + 1) ) )
+        FatalError("GetWindowName: malloc failed\n");	   
+    if( (retValue = GetWindowProperty(pWin, atom, 0L, bytesLeft, False,
+-                        AnyPropertyType, &retType, &retFormat, 
++                        AnyPropertyType, retType, &retFormat, 
+                         &nItems, &bytesLeft, (unsigned char**)ppName)) != Success){
+-       ErrorF("GetWindowName: GetWindowProperty failed\n");
+        free(strName);
+        return retValue;
+    }
+@@ -425,33 +448,46 @@
+    strName[origLen] = 0;
+    *ppName = strName;
+ #ifdef NXWIN_MULTIWINDOW_DEBUG
+-   ErrorF("GetWindowName: strName %s\n\torigLen %d\n\t*ppName %s\n", strName, origLen, *ppName);
++   ErrorF("GetWindowName: strName %s (%d) \n\t*ppName %s (%d)\n", strName, origLen, *ppName,bytesLeft);
+ #endif
+    return Success;
+ }
+ 
+-static void
+-GetWindowName (void *pWin, char **ppName)
++/* chgs by dimbor */
++void
++GetWindowNameW (void *pWin, wchar_t **ppWName)
+ {
+-   Atom                  reqAtom;
+-   char                  atom_NET_WM_NAME[] = "_NET_WM_NAME";
+-
+-   /*
+-   XTextProperty		xtpName;
+-   */
+-#if CYGMULTIWINDOW_DEBUG
+-   ErrorF ("GetWindowName\n");
+-#endif
+-
+-   /* Intialize ppName to NULL */
+-   *ppName = NULL;
+-
+-   /* TRY with ATOM WM_NAME */
+-   reqAtom = XA_WM_NAME;
+-   if( privateGetWindowName(pWin, ppName, reqAtom) == Success )
+-	   return;
+-   reqAtom = MakeAtom(atom_NET_WM_NAME, sizeof(atom_NET_WM_NAME) - 1, True);
+-   privateGetWindowName(pWin, ppName, reqAtom);
++   char *pName;
++   ATOM retType;
++   pName = NULL;
++   *ppWName=NULL;
++   if(privateGetWindowName(pWin, &pName, _NET_WM_NAME, &retType) == Success)
++   {
++    if (pName) 
++    { 
++      if (!strlen(pName))
++    	  free(pName);
++    }
++    else pName=NULL;
++   }
++   if (!pName)/* TRY with ATOM WM_NAME */
++   {
++     if(privateGetWindowName(pWin, &pName, WM_NAME, &retType) == Success)
++     {
++       if (pName) 
++       { 
++         if (!strlen(pName))
++        	 free(pName);
++       }
++       else pName=NULL;
++     }
++   }
++   if (pName)
++   {
++     extern wchar_t * cp_to_unicode(UINT, char *);
++     *ppWName=cp_to_unicode(CP_UTF8,pName);
++     free(pName);
++   }
+ }
+ 
+ /*
+@@ -486,13 +522,16 @@
+ 
+     prevNode = pMultStackQueue -> pHead;
+ 
+-    if (prevNode == NULL) {
++    if (prevNode == NULL) 
++    {
+       pMultStackQueue -> pHead = pMultStackNode;
+       pMultStackQueue -> pTail = pMultStackNode;
+     }
+-    else {
++    else 
++    {
+       int count = 1;
+-      while (prevNode -> pNext != NULL) {
++      while (prevNode -> pNext != NULL) 
++      {
+         prevNode = prevNode -> pNext;
+         count++;
+       }
+@@ -501,7 +540,8 @@
+     }
+   }
+ 
+-  else {
++  else 
++  {
+ #endif
+ 
+     if (clients[CLIENT_ID(((DrawableRec*) pWin)->id)])
+@@ -537,6 +577,67 @@
+     return 1;
+ }
+ 
++/* --------------------- Start of addition by dimbor ---------------------------------- */
++
++void 
++winSetWinName (WMMsgNodePtr pNode)
++{
++  {
++    wchar_t 	*pszWName=NULL;
++    LPVOID     lpOName[500];
++#if 0
++    XWMHints			*pHints;
++#endif
++    if (!winGetOverrideRedirectPriv(pNode->msg.pWin))
++     {
++#ifdef NXWIN_MULTIWINDOW
++#ifdef NXWIN_MULTIWINDOW_DEBUG
++	if(nxwinMultiwindow)
++             ErrorF("winMultiWindowWMProc: LOCK before GetWindowName\n");
++	else
++	     ErrorF("winMultiWindowWMProc: before GetWindowName\n");	
++#endif
++             if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultiwindowMutex))
++                     ErrorF("winMultiWindowWMProc: pthread_mutex_lock failed\n");
++#endif
++	GetWindowNameW(pNode->msg.pWin, &pszWName);
++#ifdef NXWIN_MULTIWINDOW
++#ifdef NXWIN_MULTIWINDOW_DEBUG
++	if(nxwinMultiwindow)
++             ErrorF("winMultiWindowWMProc: UNLOCK after GetWindowName\n");
++	else
++	     ErrorF("winMultiWindowWMProc: after GetWindowName\n");
++#endif
++        if(nxwinMultiwindow && pthread_mutex_unlock(&nxwinMultiwindowMutex) != 0)
++             ErrorF("winMultiWindowWMProc: !!! pthread_mutex_unlock failed\n");
++#endif
++	if(!pszWName){
++	     return;
++		}
++
++#ifdef NXWIN_MULTIWINDOW_DEBUG
++	ErrorF("winMultiWindowWMProc!!!: Window title after converting  - %s\n",pszWName);
++#endif
++	/* set the Windows window name */
++   int len_OName=GetWindowText(pNode->msg.hwndWindow, (LPSTR) lpOName,500);
++   if (len_OName != lstrlenW(pszWName))  
++   {
++#ifdef NXWIN_MULTIWINDOW_DEBUG
++	  ErrorF("Length old WName [%d], new - [%d], OWName [%s]\n",
++				len_OName,lstrlenW(pszWName),(LPTSTR) lpOName);
++#endif
++	  SetWindowTextW(pNode->msg.hwndWindow, pszWName); 
++   }
++#ifdef NXWIN_MULTIWINDOW_DEBUG
++	ErrorF("winMultiWindowWMProc: Insert here LoadIcon\n");
++#endif
++   if (pszWName)
++		free (pszWName);
++      }
++  }
++}
++/* ----------- End of addition by dimbor ------------------------------------------- */
++
+ static void *
+ winMultiWindowWMProc (void *pArg)
+ {
+@@ -590,9 +691,9 @@
+ #endif
+ 
+ 	case WM_WM_RAISE:
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("\tWM_WM_RAISE\n");
+-#endif
++/* --------------------- Start of addition by dimbor ---------------------------------- */
++	  winSetWinName (pNode);
++/* ----------- End of addition by dimbor ------------------------------------------- */
+ 
+ 	  /* Raise the window */
+ 	  winMultStackWindow(pNode->msg.pWin, Above);
+@@ -602,9 +703,6 @@
+ 	  break;
+ 
+ 	case WM_WM_LOWER:
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("\tWM_WM_LOWER\n");
+-#endif
+ 
+ 	  /* Lower the window */
+ 	  winMultStackWindow(pNode->msg.pWin, Below);
+@@ -614,63 +712,10 @@
+ 	  break;
+ 
+ 	case WM_WM_MAP:
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("\tWM_WM_MAP\n");
+-#endif
+-	  {
+-	    /*XWindowAttributes		attr;*/
+-	    char			*pszName;
+-#if 0
+-	    XWMHints			*pHints;
+-#endif
+-
+-	    /* Get the window attributes */
+-	    /*
+-	    XGetWindowAttributes (pWMInfo->pDisplay,
+-				  pNode->msg.iWindow,
+-				  &attr);
+-             */
+-	    if (!winGetOverrideRedirectPriv(pNode->msg.pWin))
+-	      {
+-#ifdef NXWIN_MULTIWINDOW
+-#ifdef NXWIN_MULTIWINDOW_DEBUG
+-		if(nxwinMultiwindow)
+-	             ErrorF("winMultiWindowWMProc: LOCK before GetWindowName\n");
+-		else
+-		     ErrorF("winMultiWindowWMProc: before GetWindowName\n");	
+-#endif
+-                if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultiwindowMutex))
+-	                     ErrorF("winMultiWindowWMProc: pthread_mutex_lock failed\n");
+-#endif
+-		/* Set the Windows window name */
+-		GetWindowName(pNode->msg.pWin, &pszName);
+-#ifdef NXWIN_MULTIWINDOW
+-#ifdef NXWIN_MULTIWINDOW_DEBUG
+-		if(nxwinMultiwindow)
+-	             ErrorF("winMultiWindowWMProc: UNLOCK after GetWindowName\n");
+-		else
+-		     ErrorF("winMultiWindowWMProc: after GetWindowName\n");
+-#endif
+-                if(nxwinMultiwindow && pthread_mutex_unlock(&nxwinMultiwindowMutex) != 0)
+-	             ErrorF("winMultiWindowWMProc: !!! pthread_mutex_unlock failed\n");
+-#endif
+-		if(!pszName){
+-		     ErrorF("winMultiWindowWMProc: GetWindowName failed\n");	
+-		     break;
+-		}
+-		SetWindowText (pNode->msg.hwndWindow, pszName);
+-#ifdef NXWIN_MULTIWINDOW_DEBUG
+-		ErrorF("winMultiWindowWMProc: Insert here LoadIcon\n");
+-#endif
+-		free (pszName);
+-	      }
+-	  }
+-	  break;
++/* code deleted by dimbor */
++   break;
+ 
+ 	case WM_WM_UNMAP:
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("\tWM_WM_UNMAP\n");
+-#endif
+ 	  
+ 	  /* Unmap the window */
+ 	  /*
+@@ -700,9 +745,6 @@
+ 	  break;
+ 
+ 	case WM_WM_KILL:
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("\tWM_WM_KILL\n");
+-#endif
+ #ifdef NXWIN_MULTIWINDOW_DEBUG
+ 	  ErrorF ("winMultiWindowWMProc: WM_WM_KILL\n");
+ #endif
+@@ -858,11 +900,9 @@
+ 	  ErrorF ("winMultiWindowWMProc: WM_WM_KILL end\n");
+ #endif
+ 	  break;
++/* #undef NXWIN_MULTIWINDOW_DEBUG */
+ 
+ 	case WM_WM_ACTIVATE:
+-#if CYGMULTIWINDOW_DEBUG
+-	  ErrorF ("\tWM_WM_ACTIVATE\n");
+-#endif
+ 	  
+ 	  /* Set the input focus */
+ 	  /*
+@@ -890,10 +930,15 @@
+            *
+            */
+ 
++/* code bellow commented by dimbor - customization for several wine-progs 
++   under one rootless session */
++/*
+           nxwinSetInputFocusFlag = 1;
+           nxwinSetInputFocusFocus = pNode -> msg.iWindow;
+           nxwinSetInputFocusClient = CLIENT_ID(nxwinSetInputFocusFocus);
+- 
++*/ 
++          SetInputFocus (winGetClientPriv(pNode->msg.pWin), winGetinputInfokeyboard(),
++                         pNode->msg.iWindow, RevertToPointerRoot, CurrentTime, False);
+ #ifdef NXWIN_MULTIWINDOW
+ #ifdef NXWIN_MULTIWINDOW_DEBUG
+ 	  if(nxwinMultiwindow)
+@@ -1116,6 +1161,7 @@
+ 
+ #if 0
+   /* Open the X display */
++  int iRetries=0;
+   do
+     {
+       /* Try to open the display */
+@@ -1146,14 +1192,35 @@
+   ErrorF ("winInitMultiWindowWM - MUTEX successfully initialized.\n");
+   
+ 
+-  /* Create some atoms */
+-  ErrorF("winInitMultiWindowWM: creating Atom %s\n", nxwinWM_PROTOCOLS);
++  /* Create some atoms (chg by dimbor)*/
+   pWMInfo->atmWmProtos =  MakeAtom(nxwinWM_PROTOCOLS, strlen(nxwinWM_PROTOCOLS), True);
+   /*
+ 	  XInternAtom (pWMInfo->pDisplay, "WM_PROTOCOLS", False);
+ */	  
+-  ErrorF("winInitMultiWindowWM: creating Atom %s\n", nxwinWM_DELETE);
+   pWMInfo->atmWmDelete =  MakeAtom(nxwinWM_DELETE, strlen(nxwinWM_DELETE), True);
++  WM_TRANSIENT_FOR=MakeAtom(nxwinWM_TRANSIENT_FOR,strlen(nxwinWM_TRANSIENT_FOR),True);
++  _MOTIF_WM_HINTS=MakeAtom(_XA_MOTIF_WM_HINTS,strlen(_XA_MOTIF_WM_HINTS),True);
++  _NET_WM_WINDOW_TYPE=MakeAtom(nxwin_NET_WM_WINDOW_TYPE,strlen(nxwin_NET_WM_WINDOW_TYPE),True);
++  _NET_WM_WINDOW_TYPE_NORMAL=MakeAtom(nxwin_NET_WM_WINDOW_TYPE_NORMAL,strlen(nxwin_NET_WM_WINDOW_TYPE_NORMAL),True);
++  _NET_WM_WINDOW_TYPE_DIALOG=MakeAtom(nxwin_NET_WM_WINDOW_TYPE_DIALOG,strlen(nxwin_NET_WM_WINDOW_TYPE_DIALOG),True);
++  _NET_WM_WINDOW_TYPE_UTILITY=MakeAtom(nxwin_NET_WM_WINDOW_TYPE_UTILITY,strlen(nxwin_NET_WM_WINDOW_TYPE_UTILITY),True);
++  WM_NORMAL_HINTS=MakeAtom(nxwinWM_NORMAL_HINTS, strlen(nxwinWM_NORMAL_HINTS), True);
++  _NET_WM_NAME=MakeAtom(nxwin_NET_WM_NAME, strlen(nxwin_NET_WM_NAME), True);
++  _NET_WM_PID=MakeAtom(nxwin_NET_WM_PID, strlen(nxwin_NET_WM_PID), True);
++  WM_NAME=MakeAtom(nxwinWM_NAME, strlen(nxwinWM_NAME), True);
++  WM_STATE=MakeAtom(nxwinWM_STATE, strlen(nxwinWM_STATE), True);
++
++#if 0
++  ErrorF("winInitMultiWindowWM: creating Atoms:\n");
++  ErrorF("---- [%d == %s]\n",pWMInfo->atmWmProtos,NameForAtom(pWMInfo->atmWmProtos));
++  ErrorF("---- [%d == %s]\n",pWMInfo->atmWmDelete,NameForAtom(pWMInfo->atmWmDelete));
++  ErrorF("---- [%d == %s]\n",WM_TRANSIENT_FOR,NameForAtom(WM_TRANSIENT_FOR));
++  ErrorF("---- [%d == %s]\n",_MOTIF_WM_HINTS,NameForAtom(_MOTIF_WM_HINTS));
++  ErrorF("---- [%d == %s]\n",_NET_WM_WINDOW_TYPE,NameForAtom(_NET_WM_WINDOW_TYPE));
++  ErrorF("---- [%d == %s]\n",_NET_WM_WINDOW_TYPE_NORMAL,NameForAtom(_NET_WM_WINDOW_TYPE_NORMAL));
++  ErrorF("---- [%d == %s]\n",_NET_WM_WINDOW_TYPE_DIALOG,NameForAtom(_NET_WM_WINDOW_TYPE_DIALOG));
++  ErrorF("---- [%d == %s]\n",_NET_WM_WINDOW_TYPE_UTILITY,NameForAtom(_NET_WM_WINDOW_TYPE_UTILITY));
++#endif
+ /*
+   XInternAtom (pWMInfo->pDisplay, "WM_DELETE_WINDOW", False);
+ */  
+@@ -1181,8 +1248,9 @@
+     }
+ }
+ 
++/* by dimbor - changed name and type (unicode)*/
+ void
+-winGetWindowName(void *pWin, char **ppName)
++winGetWindowNameW(void *pWin, wchar_t **ppWName)
+ {
+-  GetWindowName(pWin, ppName);
++  GetWindowNameW(pWin, ppWName);
+ }
+diff -u -P -x '*.[ao]' nxwin.orig/winshadgdi.c nxwin/winshadgdi.c
+--- nxwin.orig/winshadgdi.c	2010-01-29 20:34:47.000000000 +0300
++++ nxwin/winshadgdi.c	2010-05-28 16:59:13.781250000 +0400
+@@ -48,6 +48,10 @@
+ 
+ #include "win.h"
+ 
++/* by dimbor */
++extern HWND WHandlers[50];
++extern int CountHandlers;
++extern POINT ptDesktopOffset;
+ /*
+  * Local function prototypes
+  */
+@@ -428,6 +432,52 @@
+ 	    s_dwNonUnitRegions, s_dwTotalUpdates);
+ #endif /* WIN_UPDATE_STATS */
+ 
++
++/* painting rootless partial - add by dimbor */
++  if (pScreenInfo->fMultiWindow)
++  {
++    /* create windows region from set of boxes */
++    HRGN DamageRgn=CreateRectRgn(0,0,0,0);
++    while (dwBox--)
++    {
++      hrgnTemp=CreateRectRgn(pBox->x1,pBox->y1,pBox->x2,pBox->y2);
++	   CombineRgn(DamageRgn,DamageRgn,hrgnTemp,RGN_OR);
++	   DeleteObject (hrgnTemp);
++	   pBox++;
++    }
++
++    OffsetRgn(DamageRgn,pScreenInfo->dwXOffset,pScreenInfo->dwYOffset);
++    
++    HWND hwndD=GetDesktopWindow();
++    int i=1;
++    while (i<=CountHandlers)
++    {
++/*
++      if(IsIconic(WHandlers[i]))
++      {
++        i++;
++        continue;
++      }
++*/
++      RECT rcC;
++      GetClientRect(WHandlers[i],&rcC);
++      MapWindowPoints(WHandlers[i],hwndD,(POINT *) &rcC,2);
++      POINT pt0; pt0.x=rcC.left; pt0.y=rcC.top;
++      HRGN UpdRgn=CreateRectRgnIndirect(&rcC);
++      if (CombineRgn(UpdRgn,UpdRgn,DamageRgn,RGN_AND) != NULLREGION)
++      {
++        OffsetRgn(UpdRgn,-pt0.x,-pt0.y);
++        InvalidateRgn(WHandlers[i],UpdRgn,FALSE);
++        UpdateWindow(WHandlers[i]);
++      }
++	   DeleteObject(UpdRgn);
++      i++;
++    }
++	 DeleteObject(DamageRgn);
++  }
++  else 
++/* -------------- */
++  {
+   /*
+    * Handle small regions with multiple blits,
+    * handle large regions by creating a clipping region and 
+@@ -496,8 +546,8 @@
+       SelectClipRgn (pScreenPriv->hdcScreen, NULL);
+     }
+ 
+-  /* Redraw all windows */
+-  if (pScreenInfo->fMultiWindow) EnumWindows(winRedrawAllProcShadowGDI, 0);
++    if (pScreenInfo->fMultiWindow) EnumWindows(winRedrawAllProcShadowGDI, 0); 
++  }
+ }
+ 
+ 
+diff -u -P -x '*.[ao]' nxwin.orig/winwindow.h nxwin/winwindow.h
+--- nxwin.orig/winwindow.h	2010-01-29 17:14:20.000000000 +0300
++++ nxwin/winwindow.h	2010-05-28 07:19:36.781250000 +0400
+@@ -139,4 +139,62 @@
+ #endif
+ 	   int dwScreen);
+ 
++/*
++ * mwm.h from wine copied by dimbor
++ */
++typedef struct {
++  unsigned long flags;
++  unsigned long functions;
++  unsigned long decorations;
++  long input_mode;
++  unsigned long status;
++} MotifWmHints, MwmHints;
++
++#define MWM_HINTS_FUNCTIONS   1
++#define MWM_HINTS_DECORATIONS 2
++#define MWM_HINTS_INPUT_MODE  4
++#define MWM_HINTS_STATUS      8
++
++#define MWM_FUNC_ALL          0x01
++#define MWM_FUNC_RESIZE       0x02
++#define MWM_FUNC_MOVE         0x04
++#define MWM_FUNC_MINIMIZE     0x08
++#define MWM_FUNC_MAXIMIZE     0x10
++#define MWM_FUNC_CLOSE        0x20
++
++#define MWM_DECOR_ALL         0x01
++#define MWM_DECOR_BORDER      0x02
++#define MWM_DECOR_RESIZEH     0x04
++#define MWM_DECOR_TITLE       0x08
++#define MWM_DECOR_MENU        0x10
++#define MWM_DECOR_MINIMIZE    0x20
++#define MWM_DECOR_MAXIMIZE    0x40
++
++#define MWM_INPUT_MODELESS                  0
++#define MWM_INPUT_PRIMARY_APPLICATION_MODAL 1
++#define MWM_INPUT_SYSTEM_MODAL              2
++#define MWM_INPUT_FULL_APPLICATION_MODAL    3
++#define MWM_INPUT_APPLICATION_MODAL         1
++
++#define MWM_TEAROFF_WINDOW 1
++
++typedef struct {
++  long flags;
++  Window wm_window;
++} MotifWmInfo, MwmInfo;
++
++#define MWM_INFO_STARTUP_STANDARD 1
++#define MWM_INFO_STARTUP_CUSTOM   2
++
++#define _XA_MOTIF_WM_HINTS    "_MOTIF_WM_HINTS"
++#define _XA_MOTIF_WM_MESSAGES "_MOTIF_WM_MESSAGES"
++#define _XA_MOTIF_WM_OFFSET   "_MOTIF_WM_OFFSET"
++#define _XA_MOTIF_WM_MENU     "_MOTIF_WM_MENU"
++#define _XA_MOTIF_WM_INFO     "_MOTIF_WM_INFO"
++
++#define _XA_MWM_HINTS    _XA_MOTIF_WM_HINTS
++#define _XA_MWM_MESSAGES _XA_MOTIF_WM_MESSAGES
++#define _XA_MWM_MENU     _XA_MOTIF_WM_MENU
++#define _XA_MWM_INFO     _XA_MOTIF_WM_INFO
++
+ #endif
