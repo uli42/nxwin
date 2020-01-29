@@ -1098,6 +1098,16 @@ if(message == stored_nxserver_version)
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	break;
 
+      if (wParam == 0x4D &&
+              s_pScreenInfo->fMultiWindow == FALSE &&
+                  (GetKeyState(VK_CONTROL) & 0x8000) &&
+                      (GetKeyState(VK_MENU) & 0x8000))
+      {
+        ShowWindow(hwnd, SW_MINIMIZE);
+
+        return 0;
+      }
+
       /*
        * FIXME: Catching Alt-F4 like this is really terrible.  This should
        * be generalized to handle other Windows keyboard signals.  Actually,

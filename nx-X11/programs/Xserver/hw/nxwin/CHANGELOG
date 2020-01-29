@@ -1,5 +1,9 @@
 ChangeLog:
 
+nxwin-1.5.0-3
+
+- Added special keystroke Ctrl-Alt-m to minimize the root window.
+
 nxwin-1.5.0-2
 
 - Removed the hardcoded value "/mnt/NX/fonts/rgb". It was overwriting
