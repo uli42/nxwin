@@ -34,7 +34,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2010 NoMachine, http://www.nomachine.com/.         */
+/* Copyright (c) 2001, 2011 NoMachine, http://www.nomachine.com/.         */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -51,7 +51,8 @@
 
 #include "win.h"
 
-#undef DEBUG
+#undef  DEBUG
+#undef  DUMP_CURSOR_BITS
 
 miPointerScreenFuncRec g_winPointerCursorFuncs =
 {
@@ -279,15 +280,26 @@ static HCURSOR nxwinCreateWinCursor(ScreenPtr pScreen, CursorPtr pCursor)
       #ifdef DEBUG
       ErrorF("nxwinCreateWinCursor: Going to copy cursor data at [%p] on bitmap "
                  "data at [%p].\n", (void *) pCursorBits, (void *) pPixel);
+      ErrorF("nxwinCreateWinCursor: Requested size [%u, %u].\n",
+                 pCursor->bits->width, pCursor->bits->height);
       #endif
 
       for (y = 0; y < MIN(height, pCursor->bits->height) ; y++)
       {
+        #ifdef DUMP_CURSOR_BITS
+        fprintf(stderr, "Data: ");
+        #endif
         for (x = 0; x < MIN(width, pCursor->bits->width); x++)
         {
           *(pPixel + y * width + x) =
               *(pCursor->bits->argb + y * pCursor->bits->width + x);
+          #ifdef DUMP_CURSOR_BITS
+          fprintf(stderr, "%.8lx ", *(pPixel + y * width + x));
+          #endif
         }
+        #ifdef DUMP_CURSOR_BITS
+        fprintf(stderr, "\n");
+        #endif
       }
 
       pMask = CreateBitmap(width, height, 1, 1, NULL);
@@ -315,8 +327,7 @@ static HCURSOR nxwinCreateWinCursor(ScreenPtr pScreen, CursorPtr pCursor)
       nxwinCursorPriv(pCursor, pScreen)->cursor = CreateIconIndirect(&iconinfo);
 
       if (nxwinCursorPriv(pCursor, pScreen)->cursor &&
-            GetIconInfo(nxwinCursorPriv(pCursor, pScreen)->cursor, &iconinfo) &&
-                iconinfo.fIcon)
+            GetIconInfo(nxwinCursorPriv(pCursor, pScreen)->cursor, &iconinfo))
       {
         if (iconinfo.fIcon)
         {
@@ -328,11 +339,16 @@ static HCURSOR nxwinCreateWinCursor(ScreenPtr pScreen, CursorPtr pCursor)
           iconinfo.yHotspot = pCursor->bits->yhot;
           nxwinCursorPriv(pCursor, pScreen)->cursor =
                             CreateIconIndirect(&iconinfo);
+        }
 
-          if (iconinfo.hbmMask)
-            DeleteObject(iconinfo.hbmMask);
-          if (iconinfo.hbmColor)
-            DeleteObject(iconinfo.hbmColor);
+        if (iconinfo.hbmMask)
+        {
+          DeleteObject(iconinfo.hbmMask);
+        }
+
+        if (iconinfo.hbmColor)
+        {
+          DeleteObject(iconinfo.hbmColor);
         }
       }
 
