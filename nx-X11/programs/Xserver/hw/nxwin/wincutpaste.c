@@ -507,4 +507,18 @@ void nxwinLostFocus(void)
    }
 }
 
+WindowPtr FindSelectionOwner(Atom selection)
+{
+  int i = 0;
+
+  while ((i < NumCurrentSelections) &&
+         CurrentSelections[i].selection != selection) i++;
+                                                                                                  
+  if (i < NumCurrentSelections)
+  {
+    return CurrentSelections[i].pWin;
+  }
+
+  return 0;  
+}
 

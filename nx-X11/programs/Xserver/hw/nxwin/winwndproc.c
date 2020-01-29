@@ -71,6 +71,22 @@ extern UINT stored_nxserver_version;
 extern BOOL isToShowMessageBox;
 extern char nxwinWinName[80];
 void showNXWin();
+extern UINT valNxAdminCommand; 
+
+char * convertLongToAscii(unsigned long val)
+{ 
+  static char total[9] = {0};
+  char array[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+  int i;  
+
+  for(i = 0; i < 8; i++)
+  {
+    total[i] = array[((val >> (i * 4)) & 0xf)];
+  }
+
+  return total;
+}
+
 #endif
 
 BOOL CALLBACK
@@ -208,6 +224,19 @@ if(message == stored_nxserver_version)
    
    return (kill(proxyPid , sig)!= -1);
  }
+ 
+ if(message == valNxAdminCommand)
+ {
+    int command = (int)wParam;
+    unsigned long partialMd5 = (unsigned long)lParam;
+    char * asciiMd5 = convertLongToAscii(partialMd5); 
+    extern int executeActionAdmin(char*, int);
+
+    ErrorF("partialMd5 is asciiMd5 is %ul %s\n",partialMd5,asciiMd5);
+
+    return executeActionAdmin(asciiMd5, command);
+ }
+
 #endif
 
 #ifdef NXWIN_KILL

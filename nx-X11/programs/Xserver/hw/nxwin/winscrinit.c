@@ -76,6 +76,7 @@
   unsigned int currentProxyPid=-1;
   UINT stored_nxserver_version = 0; 
   BOOL isToShowMessageBox = FALSE;
+  UINT valNxAdminCommand  = 0; 
 #endif
 
 #ifdef NXWIN_LOGO
@@ -645,6 +646,7 @@ winFinishScreenInitFB (int index,
   setDisplay     = RegisterWindowMessage("NX_SET_DISPLAY");    
   stored_nxserver_version = RegisterWindowMessage("STORED_NXSERVER_VERSION"); 
 
+  valNxAdminCommand = RegisterWindowMessage("NX_ADMIN_COMMAND");
   if(valNxKill == 0 || valConnected == 0 || valNxMessage == 0 || valKillESD == 0){
         ErrorF ("winFinishScreenInitFB () - failed to register message NXKILL\n");
   }

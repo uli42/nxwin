@@ -1,5 +1,24 @@
 ChangeLog:
 
+
+nxwin-1.4.0-3
+
+- Completed the terminate and suspend functionalities. 
+
+nxwin-1.4.0-2
+
+- Added new window message NX_ADMIN_COMMAND, used by nxclient
+  administrator to send terminate or suspend command.
+
+- Implemented a part of the terminate or suspend functionalities 
+  which allow to comunicate to a nxagent the wanted termination 
+  or session suspension. If a older agent or a single application
+  is detected failure will be notified to nxclient administrator.
+
+nxwin-1.4.0-1
+
+- Opened the 1.4.0 branch.
+
 nxwin-1.3.2-5
 
 - Now when get the WM_CLOSE, send the wm_protocols WM_DELETE 

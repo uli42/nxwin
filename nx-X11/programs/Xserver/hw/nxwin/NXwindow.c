@@ -4020,6 +4020,112 @@ DisposeWindowOptional (pWin)
     pWin->optional = NULL;
 }
 
+extern WindowPtr FindSelectionOwner(Atom);
+
+static WindowPtr findAgentWindow(char *md5)
+{
+  Atom atom = None;
+  char *name;
+  int  len;
+  int i;
+
+  while (1)
+  {
+    atom++;
+
+    name = NameForAtom(atom);
+
+    if (name == NULL) break;
+
+    len = strlen(name);
+    if (len != 34) continue;
+
+    if (!name[0] == 'A' || !name[1] == '-') continue;
+     
+    for (i = 0; i < 32; i++)
+    {
+      if (!isxdigit(name[i])) break;
+    }
+
+    if (i != 32) continue;
+
+    /* Atom has the format "A-MD5" */
+
+    if (strncmp(name + 2 + 32 - 8, md5, 8) == 0)
+    {
+      /* Agent found. */
+      return FindSelectionOwner(atom);
+    }
+    else
+    {
+      ErrorF("Found agent %s not matching current MD5 %s\n", name, md5);
+    }
+  }
+
+  return NULL;
+}
+
+static WindowPtr findOldAgentWindow(void)
+{
+  Atom atom = MakeAtom("NX_CUT_BUFFER_SERVER", strlen("NX_CUT_BUFFER_SERVER"), FALSE);
+
+  if (atom == None)
+  {
+    return NULL;
+  }
+
+  return FindSelectionOwner(atom);
+}
+
+int executeActionAdmin(char *md5, int cmd)
+{
+  WindowPtr pWin;
+  Atom prop = MakeAtom("NX_ADMIN_COMMAND", strlen("NX_ADMIN_COMMAND"), TRUE);
+  Atom type = MakeAtom("STRING", strlen("STRING"), TRUE);
+  char *value;
+  int  len;
+
+  if ((pWin = findAgentWindow(md5)) == NULL)
+  {
+    if ((pWin = findOldAgentWindow()) == NULL)
+    {
+      /* Session is running in single application. */
+      return 102;
+    }
+
+    /* Agent is present but is not aware of nxclient
+       admin terminate-suspend feature. */
+    return 101;
+  }
+
+  /* Giving agent window the hint of what admin whant. */
+  if (cmd == 1)
+  {
+    /* Command is terminate. */
+    value = "terminate";
+  }
+  else if (cmd == 2)
+  {
+    /* Command is suspend. */
+    value = "suspend";
+  }
+  else
+  {
+    /* returning BadCommand. */
+    return 103;
+  }
+
+  len = strlen(value);
+
+  if (ChangeWindowProperty(pWin, prop, type,
+                        8, PropModeReplace, len, value, TRUE) != Success)
+  {
+    return 104;
+  }
+
+  return 100;
+}
+
 #ifndef NOLOGOHACK
 static void
 #if NeedFunctionPrototypes
