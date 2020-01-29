@@ -1,5 +1,9 @@
 ChangeLog:
 
+nxwin-2.1.0-1
+
+- Opened the 2.1.0 branch based on the 2.0.0-14.
+
 nxwin-2.0.0-14
 
 - Fixed TR09C01029. This solves problems related with non working
