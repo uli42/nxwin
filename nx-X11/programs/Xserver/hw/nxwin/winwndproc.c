@@ -1393,19 +1393,19 @@ if(message == valKillESD)
      if (nClients > 0)
      {
        ShowCursor (TRUE); 
-       strcat(title , nxwinWinName);
+      strcat(title , nxwinWinName);
 
-       if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
+      if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
            title, MB_OKCANCEL|MB_ICONQUESTION|MB_DEFBUTTON1|MB_TOPMOST))
         {
            ShowCursor (FALSE);
            return 0;
         }
-     }
       
-     GiveUp (0);
-     killProcess();
-     return 0;
+      GiveUp (0);
+      killProcess();
+      return 0;
+     }
     }
     else
     { 

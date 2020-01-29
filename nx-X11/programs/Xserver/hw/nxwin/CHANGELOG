@@ -1,10 +1,5 @@
 ChangeLog:
 
-nxwin-3.0.0-10
-
-- Fixed TR07E01754. The NXWin window couldn't be closed if no X client
-  was connected.
-
 nxwin-3.0.0-9
 
 - Solved a problem in multiwindow mode making the server hang on Vis-
