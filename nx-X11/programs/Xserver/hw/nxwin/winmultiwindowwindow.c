@@ -869,6 +869,12 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
        extern  void nxwinLostFocus();
        nxwinLostFocus();
        return 0;
+     }
+     case WM_SETFOCUS:
+     {
+       extern void nxwinGotFocus(WPARAM wParam);
+       nxwinGotFocus(wParam);
+       return 0; 
      } 
      case WM_NCMOUSEMOVE:
       /*

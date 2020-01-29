@@ -78,6 +78,7 @@
 extern          WindowPtr *WindowTable;
 extern          Selection *CurrentSelections;
 extern int      NumCurrentSelections;
+static Bool     nxwinSelection = FALSE;
 
 int             nxwinClipboardStatus;
 
@@ -95,6 +96,8 @@ Atom            clientCLIPBOARD;
 Bool            windowsOwner = FALSE;
 Bool            clientOwner  = FALSE;
 ClientPtr       lastOwnerClientPtr;
+
+       
 
 extern int GetWindowProperty(WindowPtr, Atom, long, long, 
 		Bool, Atom, Atom*, int*, unsigned long*, unsigned long*, unsigned char**);
@@ -128,13 +131,21 @@ void nxwinClearSelection(void)
    x.u.selectionClear.window = CurrentSelections[i].window;
    x.u.selectionClear.atom = XA_PRIMARY;
 
-   (void) TryClientEvents (CurrentSelections[i].client , &x, 1,
-                           NoEventMask, NoEventMask /* CantBeFiltered */,
-                           NullGrab);
+   if (CurrentSelections[i].client != NULL)
+   {
+     (void) TryClientEvents (CurrentSelections[i].client , &x, 1,
+                             NoEventMask, NoEventMask /* CantBeFiltered */,
+                             NullGrab);
+   }
+   
+   if (WindowTable[0])
+   {
+     CurrentSelections[i].window = WindowTable[0]->drawable.id;
+   }
 
-   CurrentSelections[i].window = WindowTable[0]->drawable.id;
    CurrentSelections[i].client = NullClient;
    windowsOwner = TRUE;
+   nxwinSelection = FALSE;
 }
 
 void nxwinInitSelection(HWND hwnd)
@@ -161,6 +172,8 @@ void nxwinSetSelectionOwner(Selection *pSelection)
    lastOwnerWindowPtr = pSelection->pWin;
    lastOwnerWindow    = pSelection->window;
    lastOwnerClientPtr = pSelection->client;
+   
+   nxwinSelection = TRUE;
 /*
     if (pSelection->selection == XA_PRIMARY)
     {
@@ -486,6 +499,32 @@ Bool nxwinSendNotify(xEvent* x)
   }
   return FALSE;
 }
+
+void nxwinGotFocus(wParam)
+{ 
+  extern Bool nxwinMultiwindow;
+
+  if (nxwinMultiwindow == TRUE)
+  {
+    if(!wParam)
+    { 
+      nxwinClearSelection();
+      FlushAllOutput();
+    }
+    else if(nxwinSelection == FALSE)
+    {
+      nxwinClearSelection();
+      FlushAllOutput();
+    }
+  } 
+  else
+  {
+    nxwinClearSelection();
+    FlushAllOutput();
+  }  
+}
+
+
 
 void nxwinLostFocus(void)
 {

@@ -1,5 +1,21 @@
 ChangeLog:
 
+nxwin-1.5.0-7
+
+- Merged patch from Cygwin/XFree86 to stop printing the 
+  IDirectDrawSurface4_Blt() failure messages after 10 times.
+
+- Fixed TR10C01050. Added a check on a lParam bit of WM_KEYDOWN mes-
+  sage in order to filter Windows autorepeat for modifier keys.
+
+- Fixed a segmentation fault arising when disconnecting the nxagent in
+  multiwindow mode.
+
+- Fixed TR10C01095. In order to notify applications like OpenOffice or
+  Gnome-Text-Editor that they have losen the selection, after select-
+  ing some text in a Windows application by Ctrl-C,it's necessary sen-
+  ding them a ClearSelecion event when they lose the focus.
+
 nxwin-1.5.0-6
 
 - Fixed TR08C00965. If a window had no WM icon defined, the icon of a

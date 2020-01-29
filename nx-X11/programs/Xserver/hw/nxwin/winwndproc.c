@@ -1047,6 +1047,10 @@ if(message == stored_nxserver_version)
       if (s_pScreenPriv == NULL || s_pScreenInfo->fIgnoreInput)
 	break;
 
+      extern void nxwinGotFocus(WPARAM wParam);
+      
+      nxwinGotFocus(wParam); 
+
       /* Restore the state of all mode keys */
       winRestoreModeKeyStates (s_pScreen);
       return 0;
@@ -1148,9 +1152,21 @@ if(message == stored_nxserver_version)
 	return 0;
 
       /* Send the key event(s) */
+     
       winTranslateKey (wParam, lParam, &iScanCode);
-      for (i = 0; i < LOWORD(lParam); ++i)
-	winSendKeyEvent (iScanCode, TRUE);
+      
+      /* 
+       * Have a check on the 31st bit of lParam in order to filter Windows 
+       * autorepeat caused by user holding down a modifier key
+       */
+      
+      if (!(lParam & 1L << 30) || 
+             (wParam !=VK_CAPITAL && wParam !=VK_SCROLL && wParam !=VK_NUMLOCK &&
+                 wParam !=VK_MENU && wParam !=VK_CONTROL && wParam !=VK_SHIFT)) 
+        {   
+          for (i = 0; i < LOWORD(lParam); ++i)  
+	    winSendKeyEvent (iScanCode, TRUE);
+        } 
       return 0;
 
     case WM_SYSKEYUP:
