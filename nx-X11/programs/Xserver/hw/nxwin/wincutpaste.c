@@ -504,6 +504,7 @@ void nxwinLostFocus(void)
       (void) TryClientEvents (lastOwnerClientPtr, &x, 1,
                                NoEventMask, NoEventMask /* CantBeFiltered */,
                                NullGrab);
+      FlushAllOutput();
    }
 }
 

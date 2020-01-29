@@ -1996,22 +1996,28 @@ privLoadIcon(WindowPtr pWin)
 	  	if( pPtr )
       			hIcon = winXIconToHICON(pPtr, pPtrMask);
 	  }
-	  else{
-		  WindowPtr sibling = pWin;
 
-		  while( sibling && sibling->prevSib )
-			  sibling = sibling->prevSib;
+          /* If no icon is hinted, the default was the icon of a sibling window.
+           * Using the server icon seems more suitable.
+           *
+	   * else{
+	   *         WindowPtr sibling = pWin;
+           *
+	   *         while( sibling && sibling->prevSib )
+	   *       	  sibling = sibling->prevSib;
+           *
+	   *         while( sibling ){
+	   *         	winWindowPriv(sibling);
+           *
+	   *       	if( pWinPriv->hWnd ){
+	   *         		hIcon = (HICON)GetClassLong(pWinPriv->hWnd, GCL_HICON);
+	   *       		break;
+	   *       	}
+	   *         	sibling = sibling->nextSib;
+	   *         }
+           * }
+           */
 
-		  while( sibling ){
-	          	winWindowPriv(sibling);
-
-			if( pWinPriv->hWnd ){
-		  		hIcon = (HICON)GetClassLong(pWinPriv->hWnd, GCL_HICON);
-				break;
-			}
-	          	sibling = sibling->nextSib;
-		  }
-          }
       }	
       if( hIcon == 0 )
 	      hIcon = LoadIcon (g_hInstance, MAKEINTRESOURCE(IDI_ICON2));

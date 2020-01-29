@@ -1,5 +1,21 @@
 ChangeLog:
 
+nxwin-1.5.0-6
+
+- Fixed TR08C00965. If a window had no WM icon defined, the icon of a
+  sibling window became the default. Now use the NoMachine logo.
+
+nxwin-1.5.0-5
+
+- Fixed TR06C00918. Tell the server to flush the output in order to
+  send a RequestSelection event immediately when the main window lose
+  the keyboard focus.
+
+nxwin-1.5.0-4
+
+- Fixed a segmentation fault arising when shutting down the server in
+  multiwindow mode.
+
 nxwin-1.5.0-3
 
 - Added special keystroke Ctrl-Alt-m to minimize the root window.

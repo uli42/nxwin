@@ -72,7 +72,10 @@
 
 /* Local headers */
 #include "winwindow.h"
+#include "../../include/resource.h"
+#include "../../include/pixmapstr.h"
 
+extern void **clients;
 
 /*
  * Constant defines
@@ -464,8 +467,16 @@ winMultStackWindow(pWin, val)
         if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultiwindowMutex))
              ErrorF("winMultStackWindow: !!! pthread_mutex_lock failed\n");
 #endif
-        if( ConfigureWindow(pWin, CWStackMode, &val, winGetClientPriv(pWin)) != Success)
-	    ErrorF("winMultStackWindow: ConfigureWindow not returned 0\n");
+        if (clients[CLIENT_ID(((DrawableRec*) pWin)->id)])
+        {
+          if( ConfigureWindow(pWin, CWStackMode, &val, winGetClientPriv(pWin)) != Success)
+	      ErrorF("winMultStackWindow: ConfigureWindow not returned 0\n");
+        }
+        else
+        {
+          ErrorF("winMultStackWindow: ConfigureWindow not called\n");
+        }
+
     
 #ifdef NXWIN_MULTIWINDOW
 #ifdef NXWIN_MULTIWINDOW_DEBUG
