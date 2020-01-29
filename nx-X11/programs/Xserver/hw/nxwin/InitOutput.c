@@ -78,6 +78,7 @@ Bool            g_fKeyboardHookLL = TRUE;
 #ifdef NXWIN_MULTIWINDOW
 Bool            nxwinMultiwindow = FALSE;
 pthread_mutex_t nxwinMultiwindowMutex;
+pthread_mutex_t nxwinMultStackMutex;
 #endif
 
 /*

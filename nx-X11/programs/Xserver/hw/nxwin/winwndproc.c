@@ -1428,9 +1428,16 @@ if(message == valKillESD)
 #ifdef NXWIN_CLIPBOARD
     case WM_DESTROYCLIPBOARD:
         {
+        /*
+         * nxwinClearSelection() is already called after
+         * the system clipboard is cleared.
+         */
+
+        /*
 	extern void nxwinClearSelection(void);
 	        nxwinClearSelection();
 		return 0;
+        */
 	}
 #endif
     #ifdef ALLOC_CONSOLE_DEBUG

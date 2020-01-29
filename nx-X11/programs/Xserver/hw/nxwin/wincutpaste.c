@@ -174,6 +174,17 @@ void nxwinSetSelectionOwner(Selection *pSelection)
    lastOwnerClientPtr = pSelection->client;
    
    nxwinSelection = TRUE;
+
+   /*
+    * Clear system clipboard.
+    */
+
+   if (OpenClipboard(lastHwnd))
+   {
+     EmptyClipboard();
+     CloseClipboard();
+   }
+
 /*
     if (pSelection->selection == XA_PRIMARY)
     {

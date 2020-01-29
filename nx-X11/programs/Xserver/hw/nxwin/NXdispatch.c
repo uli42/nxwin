@@ -94,6 +94,9 @@ int ProcInitialConnection();
 
 #include "NXwin.h"
 
+#include "win.h"
+
+#include "winmultstack.h"
 #include "windowstr.h"
 #include "fontstruct.h"
 #include "dixfontstr.h"
@@ -159,7 +162,14 @@ extern void SwapConnClientPrefix(
 #ifdef NXWIN_MULTIWINDOW
 extern Bool nxwinMultiwindow;
 extern pthread_mutex_t nxwinMultiwindowMutex;
+extern pthread_mutex_t nxwinMultStackMutex;
+
+extern pthread_mutex_t nxwinMultStackMutex;
 #endif
+
+int nxwinSetWindowTrap = 0;
+
+extern MultStackQueuePtr pMultStackQueue;
 
 Selection *CurrentSelections;
 int NumCurrentSelections;
@@ -195,6 +205,7 @@ extern void nClientsTimer();
 
 #endif
 
+extern void* winGetClientPriv(void*);
 
 static void KillAllClients(
 #if NeedFunctionPrototypes
@@ -490,6 +501,73 @@ SmartScheduleClient (int *clientReady, int nready)
 
 #define MAJOROP ((xReq *)client->requestBuffer)->reqType
 
+#ifdef NXWIN_MULTIWINDOW
+void nxwinWMMultStackWindow()
+{
+  MultStackNodePtr pOldHead;
+
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+  ErrorF("Dispatch: lock before queue access\n");
+#endif
+
+  if(pthread_mutex_lock(&nxwinMultStackMutex))
+       ErrorF("Dispatch: pthread_mutex_lock() before queue failed\n");
+
+  while (pMultStackQueue -> pHead != NULL) {
+
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+    ErrorF("Dispatch: pWin [%p]\n", pMultStackQueue -> pHead -> pWin);
+#endif
+
+    if (clients[CLIENT_ID(((DrawableRec*) pMultStackQueue -> pHead -> pWin)->id)]) {
+
+      WindowPtr pW = pMultStackQueue -> pHead -> pWin;
+      winWindowPriv(pW);
+
+      if (IsWindow(pWinPriv->hWnd)) {
+
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+        ErrorF("Dispatch: lock before ConfigureWindow\n");
+#endif
+
+        if(pthread_mutex_lock(&nxwinMultiwindowMutex))
+             ErrorF("Dispatch: pthread_mutex_lock() before ConfigureWindow failed\n");
+
+        nxwinSetWindowTrap = 1;
+
+        if (ConfigureWindow(pMultStackQueue -> pHead -> pWin,
+                            CWStackMode,
+                            &(pMultStackQueue -> pHead -> val),
+                            winGetClientPriv(pMultStackQueue -> pHead -> pWin)) != Success)
+            ErrorF("Dispatch: ConfigureWindow not returned 0\n");
+
+        nxwinSetWindowTrap = 0;
+
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+        ErrorF("Dispatch: unlock after ConfigureWindow\n");
+#endif
+
+        if(pthread_mutex_unlock(&nxwinMultiwindowMutex))
+             ErrorF("Dispatch: pthread_mutex_unlock() after ConfigureWindow failed\n");
+      }
+      else
+          ErrorF("Dispatch: [%p] has not valid handle\n", pW);
+    }
+
+    pOldHead = pMultStackQueue -> pHead;
+    pMultStackQueue -> pHead = pMultStackQueue -> pHead -> pNext;
+    free(pOldHead);
+  }
+  pMultStackQueue -> pTail = NULL;
+
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+  ErrorF("Dispatch: unlock after queue access\n");
+#endif
+  if(pthread_mutex_unlock(&nxwinMultStackMutex))
+       ErrorF("Dispatch: pthread_mutex_unlock() after queue failed\n");
+}
+#endif
+
 void
 Dispatch()
 {
@@ -522,6 +600,12 @@ Dispatch()
 	}
 
         nxwinWMSetInputFocus();
+
+#ifdef NXWIN_MULTIWINDOW
+        if (nxwinMultiwindow) {
+          nxwinWMMultStackWindow();
+        }
+#endif
 
 	nready = WaitForSomething(clientReady);
 	
@@ -832,6 +916,7 @@ ProcDestroyWindow(client)
         return(BadWindow);
     if (pWin->parent)
 	FreeResource(stuff->id, RT_NONE);
+
     return(client->noClientException);
 }
 

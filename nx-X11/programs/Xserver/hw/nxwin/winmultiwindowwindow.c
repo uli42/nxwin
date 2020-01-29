@@ -49,7 +49,21 @@
 #include "win.h"
 #include "dixevents.h"
 #include "winclass.h"
+#include "winmultstack.h"
+#include "windowstr.h"
+#include "propertyst.h"
 
+#ifdef NXWIN_MULTIWINDOW
+extern Bool nxwinMultiwindow;
+extern pthread_mutex_t nxwinMultiwindowMutex;
+extern pthread_mutex_t nxwinMultStackMutex;
+
+extern pthread_mutex_t nxwinMultStackMutex;
+#endif
+
+extern int nxwinSetWindowTrap;
+
+extern MultStackQueuePtr pMultStackQueue;
 
 /*
  * Prototypes for local functions
@@ -457,15 +471,15 @@ winRestackWindowMultiWindow (WindowPtr pWin, WindowPtr pOldNextSib)
       hInsertAfter = HWND_TOP;
       uFlags = SWP_NOMOVE | SWP_NOSIZE;
     }
-  /* FIXME: SetWindowPos has been removed */
-  /* Perform the restacking operation in Windows */
-  /*
-  SetWindowPos (pWinPriv->hWnd,
-		hInsertAfter,
-		0, 0,
-		0, 0,
-		uFlags);
-   */
+
+  if (nxwinSetWindowTrap == 0) {
+
+    SetWindowPos (pWinPriv->hWnd,
+                  hInsertAfter,
+                  0, 0,
+                  0, 0,
+                  uFlags);
+  }
 }
 
 
@@ -650,6 +664,80 @@ winReshape (WindowPtr pWin)
 }
 #endif
 
+static WindowPtr
+winGetTransientForWindow (WindowPtr pWin)
+{
+  WindowPtr retWin;
+  PropertyPtr pProp;
+  pointer data;
+
+  retWin = pWin -> prevSib;
+
+  while (retWin)
+  {
+    pProp = wUserProps(retWin);
+
+    while (pProp)
+    {
+      data = pProp -> data;
+
+      if (!strcmp(NameForAtom(pProp -> propertyName), "WM_TRANSIENT_FOR"))
+      {
+        if (winGetWindowID(pWin) == *(XID*)data && IsWindow(winGetWindowPriv(retWin)->hWnd))
+        {
+          return retWin;
+        }
+        break;
+      }
+      pProp = pProp -> next;
+    }
+    retWin = retWin -> prevSib;
+  }
+
+  retWin = pWin -> nextSib;
+
+  while (retWin)
+  {
+    pProp = wUserProps(retWin);
+
+    while (pProp)
+    {
+      data = pProp -> data;
+
+      if (!strcmp(NameForAtom(pProp -> propertyName), "WM_TRANSIENT_FOR"))
+      {
+        if (winGetWindowID(pWin) == *(XID*)data && IsWindow(winGetWindowPriv(retWin)->hWnd))
+        {
+          return retWin;
+        }
+        break;
+      }
+      pProp = pProp -> next;
+    }
+    retWin = retWin -> nextSib;
+  }
+  return NULL;
+}
+
+static WindowPtr
+winIsTransientForWindow (WindowPtr pWin)
+{
+  PropertyPtr pProp;
+  pointer data;
+
+  pProp = wUserProps(pWin);
+
+  while (pProp)
+  {
+    if (!strcmp(NameForAtom(pProp->propertyName), "WM_TRANSIENT_FOR"))
+    {
+      data = pProp->data;
+      return (WindowPtr) SecurityLookupWindow(*(XID*)data, wClient(pWin), SecurityReadAccess);
+    }
+    pProp = pProp->next;
+  }
+  return NULL;
+}
 
 /*
  * winTopLevelWindowProc - Window procedure for all top-level Windows windows.
@@ -673,6 +761,7 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
   winWMMessageRec	wmMsg;
   static Bool		s_fTracking = FALSE;
   static Bool           s_fCursor = TRUE;
+  WindowPtr             transientForWin;
 
   /* Check if the Windows window property for our X window pointer is valid */
   if ((pWin = GetProp (hwnd, WIN_WINDOW_PROP)) != NULL)
@@ -1036,11 +1125,34 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
 
       /* Check if the current window is the active window in Windows */
       if (GetActiveWindow () == hwnd)
-	{
+      {
+
+        /*
+         * Avoid restack if we find a window which has
+         * WM_TRANSIENT_FOR property set to this window.
+         */
+
+        transientForWin = (WindowPtr) winGetTransientForWindow(pWin);
+
+        if (transientForWin &&
+               ((winGetWindowPriv(transientForWin)) -> fXKilled) == 0 &&
+                   ((winGetWindowPriv(pWin)) -> fXKilled) == 0)
+        {
+
+          /* Tell our Window Manager thread to raise the window */
+          wmMsg.msg = WM_WM_RAISE;
+          winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
+
+          SetWindowPos(winGetWindowPriv(transientForWin)->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        }
+
+        else
+        {
 	  /* Tell our Window Manager thread to raise the window */
 	  wmMsg.msg = WM_WM_RAISE;
 	  winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
-	}
+        }
+      }
 
       /* Tell our Window Manager thread to activate the window */
       wmMsg.msg = WM_WM_ACTIVATE;
@@ -1249,6 +1361,26 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
 
 	  /* Tell our Window Manager thread to lower the window */
 	  winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
+
+          /*
+           * If this window has WM_TRANSIENT_FOR property, also the window
+           * that WM_TRANSIENT_FOR is set to must be minimized.
+           */
+
+          WindowPtr pW;
+          pW = winIsTransientForWindow(pWin);
+
+          if (pW)
+          {
+            WINDOWPLACEMENT windPlace;
+            windPlace.length = sizeof(WINDOWPLACEMENT);
+
+            GetWindowPlacement(winGetWindowPriv(pW)->hWnd, &windPlace);
+
+            windPlace.showCmd = SW_MINIMIZE;
+            SetWindowPlacement(winGetWindowPriv(pW)->hWnd, &windPlace);
+          }
+
 	  break;
 
 	case SIZE_RESTORED:
@@ -1256,13 +1388,33 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
 #if CYGMULTIWINDOW_DEBUG
 	  ErrorF ("SIZE_RESTORED || SIZE_MAXIMIZED\n");
 #endif
-	  /* Break out if nothing to do */
 	  /* FIXME: perhaps it can be Optimized 
 	   *        for SIZE_MAXIMIZED doesn't need winResizeXWindow */
 	  if (pWinPriv->iWidth == (short) LOWORD(lParam)
 	      && pWinPriv->iHeight == (short) HIWORD(lParam)
 	      && wParam == SIZE_RESTORED)
+          {
+
+            /*
+             * If we find a window which has WM_TRANSIENT_FOR property
+             * set to this window, also such a window must be restored.
+             */
+
+            transientForWin = (WindowPtr) winGetTransientForWindow(pWin);
+
+            if (transientForWin)
+            {
+              WINDOWPLACEMENT windPlace;
+              windPlace.length = sizeof(WINDOWPLACEMENT);
+
+              GetWindowPlacement(winGetWindowPriv(transientForWin)->hWnd, &windPlace);
+
+              windPlace.showCmd = SW_RESTORE;
+              SetWindowPlacement(winGetWindowPriv(transientForWin)->hWnd, &windPlace);
+            }
+
 	    break;
+          }
 	  
 	  /* Get the dimensions of the resized Windows window  */
 	  pWinPriv->iWidth = (short) LOWORD(lParam);
@@ -1334,6 +1486,22 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
 #if CYGMULTIWINDOW_DEBUG
       ErrorF ("winTopLevelWindowProc - WM_MOUSEACTIVATE\n");
 #endif
+
+      /*
+       * Avoid restack if we find a window which has
+       * WM_TRANSIENT_FOR property set to this window.
+       */
+
+      transientForWin = (WindowPtr) winGetTransientForWindow(pWin);
+
+      if (transientForWin)
+      {
+        SetWindowPos(pWinPriv->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+        SetWindowPos(winGetWindowPriv(transientForWin)->hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+        return MA_NOACTIVATEANDEAT;
+      }
 
       /* Check if this window needs to be made active when clicked */
       if (!GetProp (pWinPriv->hWnd, WIN_NEEDMANAGE_PROP))
@@ -1498,6 +1666,8 @@ winDestroyWindowsWindow (WindowPtr pWin)
   winWindowPriv(pWin);
   char                  classname[CLASS_NAME_LENGTH];
 
+  MultStackNodePtr p, pOld;
+
 #if CYGMULTIWINDOW_DEBUG
   ErrorF ("winDestroyWindowsWindow\n");
 #endif
@@ -1507,8 +1677,47 @@ winDestroyWindowsWindow (WindowPtr pWin)
   if (pWinPriv->hWnd == NULL)
     return;
 
-
   SetProp (pWinPriv->hWnd, WIN_WINDOW_PROP, 0);
+
+#ifdef NXWIN_MULTIWINDOW
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+    if(nxwinMultiwindow)
+         ErrorF("winDestroyWindowsWindow: lock before queue access\n");
+#endif
+    if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultStackMutex))
+         ErrorF("winDestroyWindowsWindow: pthread_mutex_lock() before queue failed\n");
+
+    if(nxwinMultiwindow) {
+
+      /* Delete window to destroy from queue */
+      if (pMultStackQueue -> pHead != NULL) {
+        if (pMultStackQueue -> pHead -> pWin == pWin) {
+          pOld = pMultStackQueue -> pHead;
+          pMultStackQueue -> pHead = pMultStackQueue -> pHead -> pNext;
+          free(pOld);
+        }
+        p = pMultStackQueue -> pHead;
+        while (p != NULL && p -> pNext != NULL) {
+          if (p -> pNext -> pWin == pWin) {
+            pOld = p -> pNext;
+            p -> pNext = p -> pNext -> pNext;
+            free(pOld);
+            if (p -> pNext == NULL) {
+              pMultStackQueue -> pTail = p;
+            }
+          }
+          p = p -> pNext;
+        }
+      }
+    }
+
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+     if(nxwinMultiwindow)
+          ErrorF("winDestroyWindowsWindow: unlock after queue access\n");
+#endif
+     if(nxwinMultiwindow && pthread_mutex_unlock(&nxwinMultStackMutex))
+          ErrorF("winDestroyWindowsWindow: pthread_mutex_unlock() after queue failed\n");
+#endif
 
   DestroyWindow (pWinPriv->hWnd);
 

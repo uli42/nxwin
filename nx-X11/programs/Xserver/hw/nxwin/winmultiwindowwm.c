@@ -71,6 +71,7 @@
 #include <windows.h>
 
 /* Local headers */
+#include "winmultstack.h"
 #include "winwindow.h"
 #include "../../include/resource.h"
 #include "../../include/pixmapstr.h"
@@ -123,7 +124,6 @@ typedef struct _WMProcArgRec {
   pthread_mutex_t	*ppmServerStarted;
 } WMProcArgRec, *WMProcArgPtr;
 
-
 /*
  * References to external symbols
  */
@@ -142,9 +142,13 @@ extern int SetInputFocus(void*, int, Window, CARD8, Time, Bool);
 extern int winGetinputInfokeyboard();
 extern int NXSendClientEventToWindow(void*, Window, Atom, long);
 extern void CloseDownClient(void*);	
+
 #ifdef NXWIN_MULTIWINDOW
 extern Bool nxwinMultiwindow;
 extern pthread_mutex_t nxwinMultiwindowMutex;
+extern pthread_mutex_t nxwinMultStackMutex;
+
+MultStackQueuePtr pMultStackQueue;
 #endif
 
 /*
@@ -461,35 +465,65 @@ winMultStackWindow(pWin, val)
 {
 
 #ifdef NXWIN_MULTIWINDOW
-#ifdef NXWIN_MULTIWINDOW_DEBUG
-	if(nxwinMultiwindow)
-             ErrorF("winMultStackWindow: LOCK before ConfigureWindow\n");
-	else
-             ErrorF("winMultStackWindow: before ConfigureWindow\n");		
-#endif
-        if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultiwindowMutex))
-             ErrorF("winMultStackWindow: !!! pthread_mutex_lock failed\n");
-#endif
-        if (clients[CLIENT_ID(((DrawableRec*) pWin)->id)])
-        {
-          if( ConfigureWindow(pWin, CWStackMode, &val, winGetClientPriv(pWin)) != Success)
-	      ErrorF("winMultStackWindow: ConfigureWindow not returned 0\n");
-        }
-        else
-        {
-          ErrorF("winMultStackWindow: ConfigureWindow not called\n");
-        }
+  MultStackNodePtr pMultStackNode;
+  MultStackNodePtr prevNode;
 
-    
-#ifdef NXWIN_MULTIWINDOW
 #ifdef NXWIN_MULTIWINDOW_DEBUG
-	if(nxwinMultiwindow)
-             ErrorF("winMultStackWindow: UNLOCK after ConfigureWindow\n");
-	else
-             ErrorF("winMultStackWindow: after ConfigureWindow\n");		
+  if(nxwinMultiwindow)
+       ErrorF("winMultStackWindow: LOCK before queue access\n");
+  else
+       ErrorF("winMultStackWindow: before ConfigureWindow\n");		
 #endif
-        if(nxwinMultiwindow && pthread_mutex_unlock(&nxwinMultiwindowMutex))
-             ErrorF("winMultStackWindow: !!! pthread_mutex_unlock failed\n");
+  if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultStackMutex))
+       ErrorF("winMultStackWindow: !!! pthread_mutex_lock failed\n");
+
+  if(nxwinMultiwindow)
+  {
+    pMultStackNode = (MultStackNodePtr) malloc(sizeof(MultStackNodeRec));
+    pMultStackNode -> pWin = pWin;
+    pMultStackNode -> val = val;
+    pMultStackNode -> pNext = NULL;
+
+    prevNode = pMultStackQueue -> pHead;
+
+    if (prevNode == NULL) {
+      pMultStackQueue -> pHead = pMultStackNode;
+      pMultStackQueue -> pTail = pMultStackNode;
+    }
+    else {
+      int count = 1;
+      while (prevNode -> pNext != NULL) {
+        prevNode = prevNode -> pNext;
+        count++;
+      }
+      prevNode -> pNext = pMultStackNode;
+      pMultStackQueue -> pTail = pMultStackNode;
+    }
+  }
+
+  else {
+#endif
+
+    if (clients[CLIENT_ID(((DrawableRec*) pWin)->id)])
+    {
+      if( ConfigureWindow(pWin, CWStackMode, &val, winGetClientPriv(pWin)) != Success)
+          ErrorF("winMultStackWindow: ConfigureWindow not returned 0\n");
+    }
+    else
+    {
+      ErrorF("winMultStackWindow: ConfigureWindow not called\n");
+    }
+
+#ifdef NXWIN_MULTIWINDOW
+  }
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+  if(nxwinMultiwindow)
+       ErrorF("winMultStackWindow: UNLOCK after queue access\n");
+  else
+       ErrorF("winMultStackWindow: after ConfigureWindow\n");
+#endif
+  if(nxwinMultiwindow && pthread_mutex_unlock(&nxwinMultStackMutex))
+       ErrorF("winMultStackWindow: !!! pthread_mutex_unlock failed\n");
 #endif
     /*
     LockDisplay(dpy);
@@ -508,7 +542,11 @@ winMultiWindowWMProc (void *pArg)
 {
   WMProcArgPtr		pProcArg = (WMProcArgPtr)pArg;
   WMInfoPtr		pWMInfo = pProcArg->pWMInfo;
-  
+
+  pMultStackQueue = (MultStackQueuePtr) malloc(sizeof(MultStackQueueRec));
+  pMultStackQueue -> pHead = NULL;
+  pMultStackQueue -> pTail = NULL;
+ 
   /* Initialize the Window Manager */
   winInitMultiWindowWM (pWMInfo, pProcArg);
   
@@ -520,6 +558,7 @@ winMultiWindowWMProc (void *pArg)
   for (;;)
     {
       WMMsgNodePtr	pNode;
+
       /* Pop a message off of our queue */
 #ifdef NXWIN_MULTIWINDOW_DEBUG
       ErrorF("winMultiWindowWMProc: before popMessage\n");
@@ -980,7 +1019,6 @@ winInitMultiWindowWM (WMInfoPtr pWMInfo, WMProcArgPtr pProcArg)
   /*
   Bool			fUnicodeSupport;
   */
-  ErrorF ("winInitMultiWindowWM:\n");
 
   /* Check that argument pointer is not invalid */
   if (pProcArg == NULL)
@@ -1070,9 +1108,10 @@ winInitMultiWindowWM (WMInfoPtr pWMInfo, WMProcArgPtr pProcArg)
   /* Print the display connection string */
   ErrorF ("winInitMultiWindowWM - DISPLAY=%s\n", pszDisplay);
   
-  /* Initialize nxwinMultiwindowMutex */
+  /* Initialize Mutex */
 #ifdef NXWIN_MULTIWINDOW
   pthread_mutex_init(&nxwinMultiwindowMutex, NULL);
+  pthread_mutex_init(&nxwinMultStackMutex, NULL);
 #endif
 
 #if 0

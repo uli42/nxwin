@@ -1,5 +1,19 @@
 ChangeLog:
 
+nxwin-3.1.0-3
+
+- Fixed TR06D01395. In rootless mode it could happen that dialogs did
+  not stay on top. Improved the management of TRANSIENT_FOR windows.
+  Changes made in winTopLevelWindowProc().
+
+- Fixed TR08E01839. Now system clipboard is emptied after a selection,
+  in order to avoid to paste previous selections outside NX session.
+
+nxwin-3.1.0-2
+
+- Fixed TR08E01811. In rootless mode it could happen that a window
+  showed the content of the window below.
+
 nxwin-3.1.0-1
 
 - Opened the 3.1.0 branch based on nxwin-3.0.0-10.
