@@ -100,6 +100,8 @@ extern Bool g_fKeyboardHookLL;
 
 int nxwinCursorShown = 0;
 
+static int isFakeCtrl_LDown = 0;
+
 char * convertLongToAscii(unsigned long val)
 { 
   static char total[9] = {0};
@@ -114,6 +116,10 @@ char * convertLongToAscii(unsigned long val)
   return total;
 }
 
+#endif
+
+#ifndef NXWIN_OLD_CURSORS
+extern int nxwinOldCursors;
 #endif
 
 BOOL CALLBACK
@@ -932,8 +938,16 @@ if(message == valKillESD)
       if (s_fCursor && (s_pScreenPriv->fActive || s_pScreenInfo->fLessPointer))
 	{
 	  /* Hide Windows cursor */
+          #ifdef NXWIN_OLD_CURSORS
 	  s_fCursor = FALSE;
 	  ShowCursor (FALSE);
+          #else
+          if (nxwinOldCursors == 1)
+          {
+	    s_fCursor = FALSE;
+	    ShowCursor (FALSE);
+          }
+          #endif
 	}
       else if (!s_fCursor && !s_pScreenPriv->fActive
 	       && !s_pScreenInfo->fLessPointer)
@@ -1170,17 +1184,8 @@ if(message == valKillESD)
       if (wParam == 0x4D &&
               s_pScreenInfo->fMultiWindow == FALSE &&
                   (GetKeyState(VK_CONTROL) & 0x8000) &&
-                      (GetKeyState(VK_MENU) & 0x8000))
-      {
-        ShowWindow(hwnd, SW_MINIMIZE);
-
-        return 0;
-      }
-
-      if (wParam == 0x4D &&
-              s_pScreenInfo->fMultiWindow == FALSE &&
-                  (GetKeyState(VK_CONTROL) & 0x8000) &&
-                      (GetKeyState(VK_MENU) & 0x8000))
+                      (GetKeyState(VK_MENU) & 0x8000) &&
+                          isFakeCtrl_LDown == 0)
       {
         ShowWindow(hwnd, SW_MINIMIZE);
 
@@ -1190,7 +1195,8 @@ if(message == valKillESD)
       if (wParam == 0x4B &&
               s_pScreenInfo -> fMultiWindow == FALSE &&
                   (GetKeyState(VK_CONTROL) & 0x8000) &&
-                      (GetKeyState(VK_MENU) & 0x8000))
+                      (GetKeyState(VK_MENU) & 0x8000) &&
+                          isFakeCtrl_LDown == 0)
       {
          char title[200] = {"NX - "};
 
@@ -1259,12 +1265,16 @@ if(message == valKillESD)
 
       /* Discard fake Ctrl_L presses that precede AltGR on non-US keyboards */
       if (winIsFakeCtrl_L (message, wParam, lParam))
+      {
+        isFakeCtrl_LDown = 1;
+
 	return 0;
+      }
 
       /* Send the key event(s) */
      
       winTranslateKey (wParam, lParam, &iScanCode);
-      
+
       /* 
        * Have a check on the 31st bit of lParam in order to filter Windows 
        * autorepeat caused by user holding down a modifier key
@@ -1294,7 +1304,16 @@ if(message == valKillESD)
 
       /* Ignore the fake Ctrl_L that follows an AltGr release */
       if (winIsFakeCtrl_L (message, wParam, lParam))
+      {
+        isFakeCtrl_LDown = 0;
+
 	return 0;
+      }
+
+      if (wParam == VK_MENU && (HIWORD (lParam) & KF_EXTENDED))
+      {
+        isFakeCtrl_LDown = 0;
+      }
 
       /* Enqueue a keyup event */
       winTranslateKey (wParam, lParam, &iScanCode);
@@ -1421,7 +1440,14 @@ if(message == valKillESD)
        if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
            title, MB_OKCANCEL|MB_ICONQUESTION|MB_DEFBUTTON1|MB_TOPMOST))
         {
+           #ifdef NXWIN_OLD_CURSORS
            ShowCursor (FALSE);
+           #else
+           if (nxwinOldCursors == 1)
+           {
+             ShowCursor (FALSE);
+           }
+           #endif
            return 0;
         }
      }

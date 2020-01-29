@@ -1,6 +1,10 @@
 ChangeLog:
 
-nxwin-3.3.0-2
+nxwin-3.3.0-1
+
+- Opened the 3.3.0 branch based on nxwin-3.2.0-4.
+
+nxwin-3.2.0-5
 
 - Fixed TR06D01394. The cursor was drawn inside the NX window. Cursor
   realization has been reworked basing on Windows cursors.
@@ -8,10 +12,6 @@ nxwin-3.3.0-2
 - Fixed TR07F02087. AltGr+k and AltGr+m key combinations were catched
   as the Ctrl+Alt+k and Ctrl+Alt+m shortcuts causing an unexpected
   behaviour.
-
-nxwin-3.3.0-1
-
-- Opened the 3.3.0 branch based on nxwin-3.2.0-4.
 
 nxwin-3.2.0-4
 

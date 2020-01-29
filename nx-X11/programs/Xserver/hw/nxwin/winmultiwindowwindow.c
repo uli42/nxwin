@@ -69,6 +69,13 @@ extern int nxwinButtonDown;
 
 extern MultStackQueuePtr pMultStackQueue;
 
+#ifndef NXWIN_OLD_CURSORS
+
+extern nxwinOldCursors;
+extern HCURSOR nxwinCurrentCursor;
+
+#endif
+
 /*
  * Prototypes for local functions
  */
@@ -948,10 +955,29 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
 	{
 	  /* Hide Windows cursor */
 	  s_fCursor = FALSE;
+          #ifdef NXWIN_OLD_CURSORS
 	  ShowCursor (FALSE);
+          #else
+          if (nxwinOldCursors == 1)
+          {
+	    ShowCursor (FALSE);
+          }
+          else
+          { 
+            SetCursor(nxwinCurrentCursor);
+          }
+          #endif
+
 	  KillTimer (hwnd, s_nIDPollingMouse);
 	}
-
+/*
+FIXME
+        else
+        {
+          s_fCursor = TRUE;
+          ShowCursor (TRUE);
+        }
+*/
       /* Deliver absolute cursor position to X Server */
       miPointerAbsoluteCursor (ptMouse.x - s_pScreenInfo->dwXOffset,
 			       ptMouse.y - s_pScreenInfo->dwYOffset,

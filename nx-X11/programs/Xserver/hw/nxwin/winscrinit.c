@@ -90,6 +90,20 @@ unsigned int nxLogoColor(unsigned int colorin) {
 }
 #endif
 
+#ifndef NXWIN_OLD__CURSORS
+
+extern int nxwinOldCursors;
+extern int nxwinAlphaCaps;
+extern OSVERSIONINFO nxwinOsVersionInfo;
+
+extern miPointerSpriteFuncRec nxwinPointerSpriteFuncs;
+extern int nxwinCursorWidth;
+extern int nxwinCursorHeight;
+
+
+
+#endif
+
 /*
  * Determine what type of screen we are initializing
  * and call the appropriate procedure to intiailize
@@ -216,6 +230,20 @@ winScreenInit (int index,
 
   /* Save the original bits per pixel */
   pScreenPriv->dwLastWindowsBitsPixel = GetDeviceCaps (hdc, BITSPIXEL);
+
+  #ifndef NXWIN_OLD_CURSORS
+
+  #define SHADEBLENDCAPS 120
+
+  nxwinAlphaCaps = GetDeviceCaps(hdc, SHADEBLENDCAPS);
+
+  ErrorF ("winFinishScreenInitFB - Device blending capability [%d].\n", r);
+
+  nxwinOsVersionInfo.dwOSVersionInfoSize = sizeof (OSVERSIONINFO);
+
+  GetVersionEx (&nxwinOsVersionInfo);
+
+  #endif
 
   /* Release the device context */
   ReleaseDC (pScreenPriv->hwndScreen, hdc);
@@ -430,7 +458,32 @@ winFinishScreenInitFB (int index,
 #if CYGDEBUG
   ErrorF ("winFinishScreenInitFB - Calling miDCInitialize ()\n");
 #endif
+
+#ifdef NXWIN_OLD_CURSORS
+
   miDCInitialize (pScreen, &g_winPointerCursorFuncs);
+
+#else
+
+  if (nxwinOldCursors == 1)
+  {
+    miDCInitialize (pScreen, &g_winPointerCursorFuncs);
+  }
+  else
+  {
+    miPointerInitialize (pScreen, &nxwinPointerSpriteFuncs,
+                               &g_winPointerCursorFuncs, 1);
+
+    nxwinCursorWidth = GetSystemMetrics(SM_CXCURSOR);
+    nxwinCursorHeight = GetSystemMetrics(SM_CYCURSOR);
+
+    #ifdef DEBUG
+    ErrorF ("winFinishScreenInitFB - System cursor size [%d, %d].\n",
+                nxwinCursorWidth, nxwinCursorHeight);
+    #endif
+  }
+
+#endif
 
   /* KDrive does winCreateDefColormap right after miDCInitialize */
   /* Create a default colormap */
@@ -792,11 +845,33 @@ winFinishScreenInitNativeGDI (int index,
   pScreen->whitePixel = pScreen->blackPixel = (Pixel) 0;
 
   /* Initialize the cursor */
+
+#ifdef NXWIN_OLD_CURSORS
+
   if (!miDCInitialize (pScreen, &g_winPointerCursorFuncs))
     {
       ErrorF ("winFinishScreenInitNativeGDI - miDCInitialize failed\n");
       return FALSE;
     }
+
+#else
+
+  if (nxwinOldCursors == 1)
+  {
+    if (!miDCInitialize (pScreen, &g_winPointerCursorFuncs))
+    {
+      ErrorF ("winFinishScreenInitNativeGDI - miDCInitialize failed\n");
+      return FALSE;
+    }
+
+  }
+  else
+  {
+    miPointerInitialize (pScreen, &nxwinPointerSpriteFuncs,
+                               &g_winPointerCursorFuncs, 1);
+  }
+
+#endif
   
   /* Create a default colormap */
   if (!miCreateDefColormap (pScreen))
