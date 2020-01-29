@@ -34,7 +34,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2010 NoMachine, http://www.nomachine.com/.         */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -58,6 +58,9 @@
 #define XKB_IN_SERVER
 #include "XKBsrv.h"
 #endif
+
+extern int XkbDfltRepeatDelay;
+extern int XkbDfltRepeatInterval;
 
 static Bool g_winKeyState[NUM_KEYCODES];
 
@@ -357,7 +360,19 @@ winKeybdBell (int iPercent, DeviceIntPtr pDeviceInt,
 void
 winKeybdCtrl (DeviceIntPtr pDevice, KeybdCtrl *pCtrl)
 {
+  #ifdef XKB
 
+  XkbControlsPtr xkbc;
+  
+  if (!noXkbExtension)
+  {
+    xkbc = pDevice -> key -> xkbInfo -> desc -> ctrls;
+
+    xkbc -> repeat_delay =  ~ 0;
+    xkbc -> repeat_interval = ~ 0;         
+  }
+
+  #endif
 }
 
 
@@ -382,6 +397,9 @@ winKeybdProc (DeviceIntPtr pDeviceInt, int iState)
       winConfigKeyboard (pDeviceInt);
 
       winGetKeyMappings (&keySyms, modMap);
+
+      XkbDfltRepeatDelay = ~ 0;
+      XkbDfltRepeatInterval = ~ 0;  
 
 #ifdef XKB
       // FIXME: Maybe we should use winGetKbdLeds () here? 

@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2010 NoMachine, http://www.nomachine.com/.         */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -565,10 +565,14 @@ winGetWorkArea (RECT *prcWorkArea, winScreenInfo *pScreenInfo)
     {
       prcWorkArea->top = iTop;
     }
+/*
   prcWorkArea->right = prcWorkArea->left + iWidth -
     iPrimaryNonWorkAreaWidth;
   prcWorkArea->bottom = prcWorkArea->top + iHeight -
     iPrimaryNonWorkAreaHeight;
+*/
+  prcWorkArea->right = prcWorkArea->left + iWidth;
+  prcWorkArea->bottom = prcWorkArea->top + iHeight;
 
   ErrorF ("winGetWorkArea - Adjusted WorkArea for multiple "
 	  "monitors: %d %d %d %d\n",

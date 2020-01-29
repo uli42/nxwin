@@ -1,5 +1,30 @@
 ChangeLog:
 
+nxwin-3.4.0-5
+
+- Fixed TR09G02273. The NX window was not able to grab the Window key.
+
+nxwin-3.4.0-4
+
+- Updated copyright to year 2010.
+
+nxwin-3.4.0-3
+
+- Fixed TR11G02296. Now NX session is displayed correctly in full
+  screen mode when loses focus.
+
+- Fixed TR10G02284. Corrected the display of NX session in floating
+  mode in dual monitor setup.
+
+- Fixed TR12F02135. Corrected paint of NX session on Windows Vista
+  with Aero enabled.
+
+- Fixed TR10G02282. Included the ability to disable the auto-repeat
+  feature on NX Client for Windows.
+
+- Improved some functions to display correctly in full screen mode
+  when session loses focus.
+
 nxwin-3.4.0-2
 
 - Fixed TR05F02062. Catched changes of WM_NAME property in order to

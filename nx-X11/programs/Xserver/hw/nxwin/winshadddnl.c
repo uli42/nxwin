@@ -34,7 +34,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2010 NoMachine, http://www.nomachine.com/.         */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -473,11 +473,9 @@ winShadowUpdateDDNL (ScreenPtr pScreen,
   HRGN			hrgnTemp = NULL, hrgnCombined = NULL;
 
   /*
-   * Return immediately if the app is not active
-   * and we are fullscreen, or if we have a bad display depth
+   * Return immediately if we have a bad display depth.
    */
-  if ((!pScreenPriv->fActive && pScreenInfo->fFullScreen)
-      || pScreenPriv->fBadDepth) return;
+  if (pScreenPriv->fBadDepth) return;
 
   /* Get the origin of the window in the screen coords */
   ptOrigin.x = pScreenInfo->dwXOffset;

@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2010 NoMachine, http://www.nomachine.com/.         */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -1320,7 +1320,7 @@ if(message == valKillESD)
        * be returned to Windows.  We may be able to trap the Windows keys,
        * but we should determine if that is desirable before doing so.
        */
-      if (wParam == VK_LWIN || wParam == VK_RWIN  && !g_fKeyboardHookLL)
+      if ((wParam == VK_LWIN || wParam == VK_RWIN) && !g_fKeyboardHookLL)
 	break;
 
       /* Discard fake Ctrl_L presses that precede AltGR on non-US keyboards */
@@ -1359,7 +1359,7 @@ if(message == valKillESD)
        * be returned to Windows.  We may be able to trap the Windows keys,
        * but we should determine if that is desirable before doing so.
        */
-      if (wParam == VK_LWIN || wParam == VK_RWIN && !g_fKeyboardHookLL)
+      if ((wParam == VK_LWIN || wParam == VK_RWIN) && !g_fKeyboardHookLL)
 	break;
 
       /* Ignore the fake Ctrl_L that follows an AltGr release */
@@ -1419,7 +1419,14 @@ if(message == valKillESD)
 	  return 0;
 	}
 
-
+/*
+FIXME: This is a workaround for Windows Vista with Aero enabled,
+       where the windows are not painted correctly.
+*/
+      if (*s_pScreenPriv -> pwinBltExposedRegions != NULL)
+      {
+        (*s_pScreenPriv -> pwinRedrawScreen)(s_pScreen);
+      }
 
 #if CYGDEBUG
       ErrorF ("winWindowProc - WM_ACTIVATE\n");

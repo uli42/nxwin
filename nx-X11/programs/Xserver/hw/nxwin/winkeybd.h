@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2010 NoMachine, http://www.nomachine.com/.         */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -246,9 +246,9 @@ g_iKeyMap [] = {
   /* 88 */	0,		0,		0,
   /* 89 */	0,		0,		0,
   /* 90 */	0,		0,		0,
-  /* 91 */	0,		0,		0,
-  /* 92 */     VK_RWIN,        0,              KEY_RMeta,
-  /* 93 */     VK_MENU,        0,              KEY_Menu,
+  /* 91 */	VK_LWIN,	0,		KEY_LMeta,
+  /* 92 */	VK_RWIN,	0,		KEY_RMeta,
+  /* 93 */	VK_MENU,	0,		KEY_Menu,
   /* 94 */	0,		0,		0,
   /* 95 */	0,		0,		0,
   /* 96 */	0,		0,		0,
