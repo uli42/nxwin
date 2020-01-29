@@ -1,5 +1,17 @@
 ChangeLog:
 
+nxwin-1.4.0-4
+
+- Removed the debug output.
+
+nxwin-1.4.0-3-DAR1-KRY2
+
+- Changing rgb path to /usr/NX/fonts. 
+
+nxwin-1.4.0-3-DAR1-KRY1
+
+- Loading rgb.txt from /usr/NX/share.
+
 nxwin-1.4.0-3-DAR1
 
 - Corrected a bug in the clipboard initialization.

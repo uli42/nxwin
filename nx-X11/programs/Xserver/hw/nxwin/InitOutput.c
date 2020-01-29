@@ -270,6 +270,10 @@ AbortDDX (void)
 void
 OsVendorInit (void)
 {
+
+  /* Using our rgb.txt instead of default one */
+  rgbPath = xstrdup ("/mnt/NX/fonts/rgb");
+
 #ifdef DDXOSVERRORF
   if (!OsVendorVErrorFProc)
     OsVendorVErrorFProc = OsVendorVErrorF;

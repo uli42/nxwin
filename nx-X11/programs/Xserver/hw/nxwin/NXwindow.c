@@ -578,10 +578,8 @@ MakeRootTile(pWin)
    (*pGC->ops->PutImage)((DrawablePtr)pWin->background.pixmap, pGC, 1,
 		    0, 0, len, 4, 0, XYBitmap, (char *)back);
 #else
-   ErrorF("nomachineLogo: 1\n");
    if(paint_nomachineLogo)
    {
-   ErrorF("nomachineLogo: 2\n");
      nomachineLogo(pGC, pWin);
      paint_nomachineLogo=FALSE;
    }
