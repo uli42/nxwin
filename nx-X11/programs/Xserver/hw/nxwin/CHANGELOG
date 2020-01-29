@@ -1,5 +1,18 @@
 ChangeLog:
 
+nxwin-3.4.0-7
+
+- Fixed TR03H02329. Handled iconized initial state in multiwindow
+  mode.
+
+- Fixed TR10G02288. Monochrome cursors were not correct.
+
+- Don't create win cursor on RealizeCursor but on SetCursor.
+
+nxwin-3.4.0-6
+
+- Added validation checks and logs in the nxwinRealizeCursor function.
+
 nxwin-3.4.0-5
 
 - Fixed TR09G02273. The NX window was not able to grab the Window key.

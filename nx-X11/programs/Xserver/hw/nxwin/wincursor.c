@@ -51,6 +51,8 @@
 
 #include "win.h"
 
+#undef DEBUG
+
 miPointerScreenFuncRec g_winPointerCursorFuncs =
 {
   winCursorOffScreen,
@@ -118,7 +120,8 @@ int nxwinAlphaCaps;
 
 OSVERSIONINFO nxwinOsVersionInfo = {0};
   
-HCURSOR nxwinCurrentCursor = NULL;
+HCURSOR nxwinLastCursorHandle = NULL;
+HCURSOR nxwinCurrentCursorHandle = NULL;
 
 
 unsigned char nxwinFlipChar[256] =
@@ -160,12 +163,6 @@ unsigned char nxwinFlipChar[256] =
 
 
 typedef struct {
-  PixmapPtr sourceBits;
-  PixmapPtr maskBits;
-  #ifdef ARGB_CURSOR
-  CARD32 *argb;
-  #endif
-  
   HCURSOR cursor;
 } nxwinPrivCursor;
 
@@ -174,7 +171,19 @@ typedef struct {
 
 static int nxwinRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
 {
-  nxwinPrivCursor *pPriv;
+  if (pCursor == NULL)
+    return 0;
+
+  pCursor->devPriv[pScreen->myNum] = xalloc(sizeof(nxwinPrivCursor));
+
+  if (pCursor->bits == NULL || pCursor->devPriv[pScreen->myNum] == NULL)
+    return 0;
+
+  return 1;
+}
+
+static HCURSOR nxwinCreateWinCursor(ScreenPtr pScreen, CursorPtr pCursor)
+{
   GCPtr pGC;
   XID  gcvals[3];
   int n;
@@ -185,18 +194,26 @@ static int nxwinRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
   PixmapPtr pTempXor;
   xRectangle backrect;
 
-  pCursor->devPriv[pScreen->myNum] = xalloc(sizeof(nxwinPrivCursor));
+  PixmapPtr sourceBits;
+  PixmapPtr maskBits;
+
+  #ifdef DUMP_CURSOR_BITS
+  int x, y;
+  #endif
+
+  nxwinPrivCursor *pPriv;
+
   pPriv = nxwinCursorPriv(pCursor, pScreen);
 
-
-  pPriv->sourceBits = NULL;
-  pPriv->maskBits = NULL;
+  #ifdef DEBUG
+  ErrorF("nxwinCreateWinCursor: Realizing cursor [%p] size [%dx%d] hotspot [%d,%d].\n",
+             (void *) pCursor, pCursor->bits->width, pCursor->bits->height,
+                 pCursor->bits->xhot, pCursor->bits->yhot);
+  #endif
 
 #ifdef ARGB_CURSOR
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-
-  pPriv->argb = NULL;
 
   if (pCursor->bits->argb != NULL)
   {
@@ -233,15 +250,36 @@ static int nxwinRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
       HDC hdc;
       hdc = GetDC(NULL);
 
+      if (hdc == NULL)
+      {
+        ErrorF("nxwinCreateWinCursor: Failed to get a DC with error '%d'.\n",
+                   GetLastError());
+
+        goto ColorCursorError;
+      }
 
       pBitmap = CreateDIBSection(hdc, (BITMAPINFO *)&bhead, DIB_RGB_COLORS, 
           (void **)&pBits, NULL, (DWORD)0);
 
       ReleaseDC(NULL,hdc);
 
+      if (pBitmap == NULL)
+      {
+        ErrorF("nxwinCreateWinCursor: Failed to create a bitmap with error '%d'.\n",
+                   GetLastError());
+
+        goto ColorCursorError;
+      }
+
+      GdiFlush();
+
       pPixel = (DWORD *)pBits;
       pCursorBits = pCursor->bits->argb;
 
+      #ifdef DEBUG
+      ErrorF("nxwinCreateWinCursor: Going to copy cursor data at [%p] on bitmap "
+                 "data at [%p].\n", (void *) pCursorBits, (void *) pPixel);
+      #endif
 
       for (y = 0; y < MIN(height, pCursor->bits->height) ; y++)
       {
@@ -254,32 +292,67 @@ static int nxwinRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
 
       pMask = CreateBitmap(width, height, 1, 1, NULL);
 
+      if (pMask == NULL)
+      {
+        ErrorF("nxwinCreateWinCursor: Failed to create a mask with error '%d'.\n",
+                   GetLastError());
+
+        DeleteObject(pBitmap);
+
+        goto ColorCursorError;
+      }
+
       iconinfo.fIcon = 0;  /* Create a cursor. */
       iconinfo.xHotspot = pCursor->bits->xhot;
       iconinfo.yHotspot = pCursor->bits->yhot;
       iconinfo.hbmMask = pMask;
       iconinfo.hbmColor = pBitmap;
 
+      #ifdef DEBUG
+      ErrorF("nxwinCreateWinCursor: Going to create the cursor icon.\n");
+      #endif
+
       nxwinCursorPriv(pCursor, pScreen)->cursor = CreateIconIndirect(&iconinfo);
+
+      if (nxwinCursorPriv(pCursor, pScreen)->cursor &&
+            GetIconInfo(nxwinCursorPriv(pCursor, pScreen)->cursor, &iconinfo) &&
+                iconinfo.fIcon)
+      {
+        if (iconinfo.fIcon)
+        {
+
+          DestroyCursor(nxwinCursorPriv(pCursor, pScreen)->cursor);
+
+          iconinfo.fIcon = 0;
+          iconinfo.xHotspot = pCursor->bits->xhot;
+          iconinfo.yHotspot = pCursor->bits->yhot;
+          nxwinCursorPriv(pCursor, pScreen)->cursor =
+                            CreateIconIndirect(&iconinfo);
+
+          if (iconinfo.hbmMask)
+            DeleteObject(iconinfo.hbmMask);
+          if (iconinfo.hbmColor)
+            DeleteObject(iconinfo.hbmColor);
+        }
+      }
 
       DeleteObject(pBitmap);          
       DeleteObject(pMask); 
       
       if (nxwinCursorPriv(pCursor, pScreen)->cursor == NULL)
       {
-        ErrorF("nxwinRealizeCursor: Failed to create ARGB cursor.\n");
+        ErrorF("nxwinCreateWinCursor: Failed to create ARGB cursor with error '%d'.\n",
+                   GetLastError());
 
         goto ColorCursorError;
       }
 
       #ifdef DEBUG
-      ErrorF("nxwinRealizeCursor: Created ARGB cursor with handle [%p].\n",
+      ErrorF("nxwinCreateWinCursor: Created ARGB cursor with handle [%p].\n",
                  nxwinCursorPriv(pCursor, pScreen)->cursor);
       #endif
 
-      pPriv->argb = pCursor->bits->argb;
-
-      return 1;
+      return nxwinCursorPriv(pCursor, pScreen)->cursor;
     }
     else
     {
@@ -332,7 +405,6 @@ static int nxwinRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
       SelectObject(andDC, andOldBitmap);
       SelectObject(xorDC, xorOldBitmap);
 
-
       DeleteDC(andDC);
       DeleteDC(xorDC);
 
@@ -352,19 +424,18 @@ static int nxwinRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
 
       if (nxwinCursorPriv(pCursor, pScreen)->cursor == NULL)
       {
-        ErrorF("nxwinRealizeCursor: Failed to create color cursor.\n");
+        ErrorF("nxwinCreateWinCursor: Failed to create color cursor with error '%d'.\n",
+                   GetLastError());
 
         goto ColorCursorError;
       }
 
       #ifdef DEBUG
-      ErrorF("nxwinRealizeCursor: Created color cursor with handle [%p].\n",
+      ErrorF("nxwinCreateWinCursor: Created color cursor with handle [%p].\n",
                   nxwinCursorPriv(pCursor, pScreen)->cursor);
       #endif
 
-      pPriv->argb = pCursor->bits->argb;
-
-      return 1;
+      return nxwinCursorPriv(pCursor, pScreen)->cursor;
     }
   }
 
@@ -372,55 +443,55 @@ ColorCursorError:
 
 #endif
 
-  pPriv->sourceBits = (*pScreen->CreatePixmap)
+  sourceBits = (*pScreen->CreatePixmap)
                           (pScreen, pCursor->bits->width,
                               pCursor->bits->height, 1);
 
-  if (pPriv->sourceBits == NULL)
+  if (sourceBits == NULL)
   {
     xfree (pPriv);
 
-    return 0;
+    return NULL;
   }
 
-  pPriv->maskBits = (*pScreen->CreatePixmap)
+  maskBits = (*pScreen->CreatePixmap)
                         (pScreen, pCursor->bits->width,
                             pCursor->bits->height, 1);
 
-  if (pPriv->maskBits == NULL)
+  if (maskBits == NULL)
   {
-    (*pScreen->DestroyPixmap)(pPriv->sourceBits);
+    (*pScreen->DestroyPixmap)(sourceBits);
 
     xfree (pPriv);
 
-    return 0;
+    return NULL;
   }
 
   pGC = GetScratchGC(1, pScreen);
 
   if (pGC == NULL)
   {
-    return 0;
+    return NULL;
   }
 
   gcvals[0] = GXcopyInverted;
   ChangeGC (pGC, GCFunction, gcvals);
-  ValidateGC ((DrawablePtr)pPriv->sourceBits, pGC);
-  (*pGC->ops->PutImage) ((DrawablePtr)pPriv->sourceBits, pGC, 1,
+  ValidateGC ((DrawablePtr)sourceBits, pGC);
+  (*pGC->ops->PutImage) ((DrawablePtr)sourceBits, pGC, 1,
                           0, 0, pCursor->bits->width, pCursor->bits->height,
                           0, XYPixmap, (char *)pCursor->bits->source);
 
   gcvals[0] = GXand;
   ChangeGC (pGC, GCFunction, gcvals);
-  ValidateGC ((DrawablePtr)pPriv->sourceBits, pGC);
-  (*pGC->ops->PutImage) ((DrawablePtr)pPriv->sourceBits, pGC, 1,
+  ValidateGC ((DrawablePtr)sourceBits, pGC);
+  (*pGC->ops->PutImage) ((DrawablePtr)sourceBits, pGC, 1,
                           0, 0, pCursor->bits->width, pCursor->bits->height,
                           0, XYPixmap, (char *)pCursor->bits->mask);
 
   gcvals[0] = GXcopyInverted;
   ChangeGC (pGC, GCFunction, gcvals);
-  ValidateGC ((DrawablePtr)pPriv->maskBits, pGC);
-  (*pGC->ops->PutImage) ((DrawablePtr)pPriv->maskBits, pGC, 1,
+  ValidateGC ((DrawablePtr)maskBits, pGC);
+  (*pGC->ops->PutImage) ((DrawablePtr)maskBits, pGC, 1,
                           0, 0, pCursor->bits->width, pCursor->bits->height,
                           0, XYPixmap, (char *)pCursor->bits->mask);
 
@@ -431,23 +502,23 @@ ColorCursorError:
 
   if (xorMask == NULL)
   {
-    (*pScreen->DestroyPixmap)(pPriv->sourceBits);
-    (*pScreen->DestroyPixmap)(pPriv->maskBits);
+    (*pScreen->DestroyPixmap)(sourceBits);
+    (*pScreen->DestroyPixmap)(maskBits);
 
     xfree (pPriv);
-    return 0;
+    return NULL;
   }
 
   andMask = xalloc(n);
 
   if (andMask == NULL)
   {
-    (*pScreen->DestroyPixmap)(pPriv->sourceBits);
-    (*pScreen->DestroyPixmap)(pPriv->maskBits);
+    (*pScreen->DestroyPixmap)(sourceBits);
+    (*pScreen->DestroyPixmap)(maskBits);
 
     xfree(xorMask);
     xfree(pPriv);
-    return 0;
+    return NULL;
 
   }
 
@@ -456,14 +527,14 @@ ColorCursorError:
 
   if (pTempAnd == NULL)
   {
-    (*pScreen->DestroyPixmap)(pPriv->sourceBits);
-    (*pScreen->DestroyPixmap)(pPriv->maskBits);
+    (*pScreen->DestroyPixmap)(sourceBits);
+    (*pScreen->DestroyPixmap)(maskBits);
 
     xfree(xorMask);
     xfree(andMask);
     xfree(pPriv);
 
-    return 0;
+    return NULL;
   }
 
   pTempXor = (*pScreen->CreatePixmap)(pScreen, nxwinCursorWidth,
@@ -471,8 +542,8 @@ ColorCursorError:
 
   if (pTempXor == NULL)
   {
-    (*pScreen->DestroyPixmap)(pPriv->sourceBits);
-    (*pScreen->DestroyPixmap)(pPriv->maskBits);
+    (*pScreen->DestroyPixmap)(sourceBits);
+    (*pScreen->DestroyPixmap)(maskBits);
 
     (*pScreen->DestroyPixmap)(pTempAnd);
 
@@ -480,7 +551,7 @@ ColorCursorError:
     xfree(andMask);
     xfree(pPriv);
 
-    return 0;
+    return NULL;
   }
 
   backrect.x = backrect.y = 0;
@@ -495,7 +566,7 @@ ColorCursorError:
   gcvals[0] = GXcopy;
   ChangeGC(pGC, GCFunction, gcvals);
   ValidateGC((DrawablePtr)pTempXor, pGC);
-  (*pGC->ops->CopyArea)((DrawablePtr)pPriv->sourceBits,
+  (*pGC->ops->CopyArea)((DrawablePtr)sourceBits,
                           (DrawablePtr)pTempXor, pGC, 0, 0,
 				pCursor->bits->width,
                                 pCursor->bits->height, 
@@ -509,7 +580,7 @@ ColorCursorError:
   gcvals[0] = GXcopy;
   ChangeGC(pGC, GCFunction, gcvals);
   ValidateGC((DrawablePtr)pTempAnd, pGC);
-  (*pGC->ops->CopyArea)((DrawablePtr)pPriv->maskBits,
+  (*pGC->ops->CopyArea)((DrawablePtr)maskBits,
                           (DrawablePtr)pTempAnd, pGC, 0, 0,
 				pCursor->bits->width,
                                 pCursor->bits->height, 
@@ -532,18 +603,57 @@ ColorCursorError:
 				                 XYPixmap,
 				                 0xffffff,
 				                 (pointer)andMask);
+
   FreeScratchGC (pGC);
 
-  for (i = 0; i < n; i++)
+  #ifdef DUMP_CURSOR_BITS
+
+  for (x = 0; x < nxwinCursorWidth; x++)
   {
-    *(andMask + i) = nxwinFlipChar[*(andMask + i)]; 
+    fprintf(stderr, "Cursor src: ");
+    for(y = 0; y < nxwinCursorHeight; y++)
+      fprintf(stderr, "%.2x ", xorMask[x + y * nxwinCursorWidth]);
+    fprintf(stderr, "\n");
   }
 
-  for (i = 0; i < n; i++)
+  for (x = 0; x < nxwinCursorWidth; x++)
   {
-    *(xorMask + i) = nxwinFlipChar[*(xorMask + i)]; 
+    fprintf(stderr, "Cursor mask: ");
+    for(y = 0; y < nxwinCursorHeight; y++)
+      fprintf(stderr, "%.2x ", andMask[x + y * nxwinCursorWidth]);
+    fprintf(stderr, "\n");
   }
 
+  fprintf(stderr, "Cursor foreground: %x %x %x\n",
+              pCursor->foreRed, pCursor->foreGreen, pCursor->foreBlue);
+  fprintf(stderr, "Cursor background: %x %x %x\n",
+              pCursor->backRed, pCursor->backGreen, pCursor->backBlue);
+
+  #endif
+
+  if (pCursor->foreRed + pCursor->foreGreen + pCursor->foreBlue >
+          pCursor->backRed + pCursor->backGreen + pCursor -> backBlue)
+  {
+    for (i = 0; i < n; i++)
+    {
+      *(xorMask + i) = (~nxwinFlipChar[(*(xorMask + i))]) &
+                           (~nxwinFlipChar[(*(andMask + i))]);
+    }
+  }
+  else
+  {
+    for (i = 0; i < n; i++)
+    {
+      *(xorMask + i) = nxwinFlipChar[(*(xorMask + i))] &
+                           (~nxwinFlipChar[(*(andMask + i))]);
+    }
+  }
+ 
+  for (i = 0; i < n; i++)
+  {
+    *(andMask + i) = nxwinFlipChar[*(andMask + i)];
+  }
+ 
   nxwinCursorPriv(pCursor, pScreen)->cursor =
       CreateCursor(g_hInstance,
                    pCursor->bits->xhot,
@@ -555,13 +665,14 @@ ColorCursorError:
 
   if (nxwinCursorPriv(pCursor, pScreen)->cursor == NULL)
   {
-    ErrorF("nxwinRealizeCursor: Failed to create monochrome cursor.\n");
+    ErrorF("nxwinCreateWinCursor: Failed to create monochrome cursor with error '%d'.\n",
+               GetLastError());
                
   }
   #ifdef DEBUG
   else
   {
-    ErrorF("nxwinRealizeCursor: Created monochrome cursor with handle [%p].\n",
+    ErrorF("nxwinCreateWinCursor: Created monochrome cursor with handle [%p].\n",
                nxwinCursorPriv(pCursor, pScreen)->cursor);
   }
   #endif
@@ -572,6 +683,20 @@ ColorCursorError:
   (*pScreen->DestroyPixmap) (pTempAnd);
   (*pScreen->DestroyPixmap) (pTempXor);
 
+  (*pScreen->DestroyPixmap) (sourceBits);
+  (*pScreen->DestroyPixmap) (maskBits);
+
+  return nxwinCursorPriv(pCursor, pScreen)->cursor;
+}
+
+static int nxwinDestroyWinCursor(HCURSOR cursor)
+{
+  #ifdef DEBUG
+  ErrorF("nxwinDestroyWinCursor: Going to destroy the cursor.\n");
+  #endif
+
+  DestroyCursor(cursor);
+
   return 1;
 }
 
@@ -581,38 +706,12 @@ static int nxwinUnrealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
 
   pPriv = nxwinCursorPriv(pCursor, pScreen);
 
-  if (pPriv && (pCursor->bits->refcnt <= 1))
+  if (pPriv != NULL)
   {
-    if (pPriv->sourceBits)
-      (*pScreen->DestroyPixmap) (pPriv->sourceBits);
-    if (pPriv->maskBits)
-      (*pScreen->DestroyPixmap) (pPriv->maskBits);
-#ifdef ARGB_CURSOR
-
-    if (pCursor->bits->argb != NULL && pPriv->argb != NULL)
-    {
-      #ifdef DEBUG
-      ErrorF("nxwinUnrealizeCursor: Destroying ARGB cursor with handle [%p].\n",
-                 nxwinCursorPriv(pCursor, pScreen)->cursor);
-      #endif
-
-      DestroyIcon(nxwinCursorPriv(pCursor, pScreen)->cursor);
-    }
-    else
-#endif
-    {
-      #ifdef DEBUG
-      ErrorF("nxwinUnrealizeCursor: Destroying monochrome cursor with handle "
-                 "[%p].\n", nxwinCursorPriv(pCursor, pScreen)->cursor);
-      #endif
-
-      DestroyCursor(nxwinCursorPriv(pCursor, pScreen)->cursor);
-    }
-
     xfree ((pointer) pPriv);
-
-    pCursor->devPriv[pScreen->myNum] = (pointer)NULL;
   }
+
+  pCursor->devPriv[pScreen->myNum] = (pointer)NULL;
  
   return 1;
 }
@@ -625,9 +724,9 @@ static void nxwinSetCursor(ScreenPtr pScreen, CursorPtr pCursor, int x, int y)
     ErrorF("nxwinSetCursor: Setting root cursor as an arrow.\n");
     #endif
 
-    nxwinCurrentCursor = LoadCursor(NULL, IDC_ARROW);
+    nxwinCurrentCursorHandle = LoadCursor(NULL, IDC_ARROW);
 
-    SetCursor(nxwinCurrentCursor);
+    SetCursor(nxwinCurrentCursorHandle);
   }
   else if (pCursor != NULL)
   {
@@ -636,9 +735,15 @@ static void nxwinSetCursor(ScreenPtr pScreen, CursorPtr pCursor, int x, int y)
                nxwinCursorPriv(pCursor, pScreen) -> cursor);
     #endif
 
-    nxwinCurrentCursor = nxwinCursorPriv(pCursor, pScreen) -> cursor;
+    if (nxwinLastCursorHandle)
+    {
+      nxwinDestroyWinCursor(nxwinLastCursorHandle);
+    }
 
-    SetCursor(nxwinCurrentCursor);
+    nxwinCurrentCursorHandle = nxwinCreateWinCursor(pScreen, pCursor);
+    nxwinLastCursorHandle = nxwinCurrentCursorHandle;
+
+    SetCursor(nxwinCurrentCursorHandle);
   }
 
   return;

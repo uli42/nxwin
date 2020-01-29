@@ -72,7 +72,7 @@ extern MultStackQueuePtr pMultStackQueue;
 #ifndef NXWIN_OLD_CURSORS
 
 extern nxwinOldCursors;
-extern HCURSOR nxwinCurrentCursor;
+extern HCURSOR nxwinCurrentCursorHandle;
 
 #endif
 
@@ -773,6 +773,7 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
   static Bool		s_fTracking = FALSE;
   static Bool           s_fCursor = TRUE;
   WindowPtr             transientForWin;
+  WinXWMHints           hints;
 
   /* Check if the Windows window property for our X window pointer is valid */
   if ((pWin = GetProp (hwnd, WIN_WINDOW_PROP)) != NULL)
@@ -968,7 +969,7 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
           }
           else
           { 
-            SetCursor(nxwinCurrentCursor);
+            SetCursor(nxwinCurrentCursorHandle);
           }
           #endif
 
@@ -1379,11 +1380,21 @@ FIXME
       /* Tell our Window Manager thread to map the window */
       winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
 
-      /* Setup the Window Manager message */
-      wmMsg.msg = WM_WM_RAISE;
+      /* Minimize window if the initial_state flag is IconicState */
+      if (GetWMHints(pWin, &hints) && (hints.flags & 1L << 1) &&
+              hints.initial_state == 3)
+      {
+        ShowWindow(hwnd, SW_SHOWMINIMIZED);
+      }
+      else
+      {
+        /* Setup the Window Manager message */
+        wmMsg.msg = WM_WM_RAISE;
 
-      /* Tell our Window Manager thread to raise the window */
-      winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
+        /* Tell our Window Manager thread to raise the window */
+        winSendMessageToWM (s_pScreenPriv->pWMInfo, &wmMsg);
+      }
+
       return 0;
 
     case WM_SIZE:

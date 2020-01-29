@@ -140,8 +140,12 @@ extern Bool permitOldBugs;
 
 #define nxwinCursorWidth 32
 #define nxwinCursorHeight 32
+/*
 #define nxwinCursorXHot 16
 #define nxwinCursorYHot 13
+*/
+#define nxwinCursorXHot 64
+#define nxwinCursorYHot 64
 
 static char nxwinCursorBitmap[] = {
  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
