@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -44,7 +44,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
+/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -84,7 +84,6 @@ extern UINT valNxMessage;
 extern UINT storedProxyPid;
 extern UINT isProxyRunning;
 extern UINT setDisplay;
-extern char nxDisplay[300];
 extern unsigned int currentProxyPid;
 static HWND     hwndLastPrivates = NULL;
 extern UINT stored_nxserver_version;
@@ -93,7 +92,7 @@ extern char nxwinWinName[80];
 void showNXWin();
 extern UINT valNxAdminCommand;
 
-Bool g_fKeyboardHookLL = TRUE;
+extern Bool g_fKeyboardHookLL;
 
 int nxwinCursorShown = 0;
 
@@ -223,15 +222,20 @@ if(message == valKillESD)
     else if(mode == 0)
      return (kill(currentProxyPid,SIGCONT)!= -1);  
   } 
+
+  /*
+   * Obsolete. Leaving it for
+   * compatibility reason.
+   */
+
  if(message == setDisplay)
  {
-   sprintf(nxDisplay , "%d",(unsigned int)lParam); 
-   
-   
+ 
    return 1; 
 
  }  
-if(message == stored_nxserver_version)
+
+ if(message == stored_nxserver_version)
  {
     isToShowMessageBox = (BOOL)lParam; 
 
@@ -1175,7 +1179,6 @@ if(message == stored_nxserver_version)
          char title[200] = {"NX - "};
 
          strcat(title, nxwinWinName);
-         strcat(title, nxDisplay);
 
          if (g_fKeyboardHookLL == TRUE)
          {
@@ -1390,20 +1393,19 @@ if(message == stored_nxserver_version)
      if (nClients > 0)
      {
        ShowCursor (TRUE); 
-      strcat(title , nxwinWinName);
-      strcat(title , nxDisplay);
+       strcat(title , nxwinWinName);
 
-      if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
+       if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
            title, MB_OKCANCEL|MB_ICONQUESTION|MB_DEFBUTTON1|MB_TOPMOST))
         {
            ShowCursor (FALSE);
            return 0;
         }
-      
-      GiveUp (0);
-      killProcess();
-      return 0;
      }
+      
+     GiveUp (0);
+     killProcess();
+     return 0;
     }
     else
     { 

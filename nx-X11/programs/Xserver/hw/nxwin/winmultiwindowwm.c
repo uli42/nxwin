@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -40,7 +40,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
+/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -88,6 +88,9 @@ extern void **clients;
 #define WIN_JMP_OKAY		0
 #define WIN_JMP_ERROR_IO	2
 
+int nxwinSetInputFocusFlag = 0;
+int nxwinSetInputFocusClient = 0;
+Window nxwinSetInputFocusFocus = 0;
 
 /*
  * Local structures
@@ -509,7 +512,6 @@ winMultiWindowWMProc (void *pArg)
   /* Initialize the Window Manager */
   winInitMultiWindowWM (pWMInfo, pProcArg);
   
-  
 #if CYGMULTIWINDOW_DEBUG
   ErrorF ("winMultiWindowWMProc ()\n");
 #endif
@@ -840,8 +842,19 @@ winMultiWindowWMProc (void *pArg)
 	  if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultiwindowMutex))
 	       ErrorF("!!! pthread_mutex_lock failed\n");
 #endif
-	  SetInputFocus ( winGetClientPriv(pNode->msg.pWin), winGetinputInfokeyboard(),
-			  pNode->msg.iWindow, RevertToPointerRoot, CurrentTime, False);
+          /*
+           *  SetInputFocus is called by Dispatch in
+           *  order to avoid potential race conditions.
+           *
+           *  SetInputFocus (winGetClientPriv(pNode->msg.pWin), winGetinputInfokeyboard(),
+           *                     pNode->msg.iWindow, RevertToPointerRoot, CurrentTime, False);
+           *
+           */
+
+          nxwinSetInputFocusFlag = 1;
+          nxwinSetInputFocusFocus = pNode -> msg.iWindow;
+          nxwinSetInputFocusClient = CLIENT_ID(nxwinSetInputFocusFocus);
+ 
 #ifdef NXWIN_MULTIWINDOW
 #ifdef NXWIN_MULTIWINDOW_DEBUG
 	  if(nxwinMultiwindow)

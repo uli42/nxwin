@@ -1,23 +1,62 @@
 ChangeLog:
 
-nxwin-2.1.0-3
+nxwin-3.0.0-10
+
+- Fixed TR07E01754. The NXWin window couldn't be closed if no X client
+  was connected.
+
+nxwin-3.0.0-9
+
+- Solved a problem in multiwindow mode making the server hang on Vis-
+  ta.
+
+nxwin-3.0.0-8
+
+- Updated the NoMachine copyright notice to year 2007.
+
+nxwin-3.0.0-7
+
+- Changed the copyright attribution from Medialogic to NoMachine.
+
+nxwin-3.0.0-6
+
+- Updated application's icons.
+
+- In the dispatch loop, checking if the client is valid before calling
+  SetInputFocus.
+
+nxwin-3.0.0-5
+
+- Changed the LICENSE file to state that the software is only made
+  available under the version 2 of the GPL.
+
+- Added file COPYING.
+
+nxwin-3.0.0-4
+
+- Fixed TR03E01651. SetInputFocus function is called by Dispatch
+  function an not more by Window Manager main Proc routine, in order
+  to avoid potential race conditions.
+
+- Added "-[no]keyhook" option in order to enable/disable the Alt+Tab
+  and Print key hooks.
+
+nxwin-3.0.0-3
 
 - Fixed TR08C00956. Now when scaling XBitmap To Windows we use the
   result of BitsPerPixel() macro instead of value stored in the drawa-
   ble structure.
 
 - When a window receives a KILLFOCUS message any pressed keys are rel-
-  eased in multiwindow mode too.
+  easedp in multiwindow mode too.
 
 - Fixed TR11D01562. Now with Ctrl+Alt+K it's possible to enable/disa-
   ble the Alt+Tab and Print key hooks in NXWin.
 
-nxwin-2.1.0-2
+nxwin-3.0.0-2
 
-- Changed the LICENSE file to state that the software is only made
-  available under the version 2 of the GPL.
-
-- Added file COPYING.
+- Based the 3.0.0-2 version on nxwin-2.1.0-1. This has to be built
+  in the nx-X11-compat tree, based on XFree86.
 
 nxwin-2.1.0-1
 

@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -44,7 +44,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
+/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -72,7 +72,6 @@
   UINT storedProxyPid =0;
   UINT isProxyRunning =0;
   UINT setDisplay     =0; 
-  char nxDisplay[300];  
   unsigned int currentProxyPid=-1;
   UINT stored_nxserver_version = 0; 
   BOOL isToShowMessageBox = FALSE;

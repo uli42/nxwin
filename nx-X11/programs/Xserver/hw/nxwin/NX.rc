@@ -56,9 +56,14 @@ END
 /*
  * Icons
  */
+
 /*
-IDI_XWIN		ICON	DISCARDABLE	"X.ico"
-*/
-IDI_ICON1   ICON  DISCARDABLE "x_16_32_xblack.ico"
+ * IDI_XWIN		ICON	DISCARDABLE	"X.ico"
+ */
+
+/*
+ * IDI_ICON1   ICON  DISCARDABLE "x_16_32_xblack.ico"
+ */
+
 IDI_ICON2   ICON  DISCARDABLE "no_x_16_32.ico"
 

@@ -72,7 +72,7 @@ SOFTWARE.
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -81,7 +81,7 @@ SOFTWARE.
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
+/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -139,6 +139,11 @@ int ProcInitialConnection();
 #define BITSET(buf, i) MASKWORD(buf, i) |= BITMASK(i)
 #define BITCLEAR(buf, i) MASKWORD(buf, i) &= ~BITMASK(i)
 #define GETBIT(buf, i) (MASKWORD(buf, i) & BITMASK(i))
+
+extern int nxwinSetInputFocusFlag;
+extern int nxwinSetInputFocusClient;
+extern Window nxwinSetInputFocusFocus;
+extern DeviceIntPtr winGetinputInfokeyboard();
 
 extern WindowPtr *WindowTable;
 extern xConnSetupPrefix connSetupPrefix;
@@ -232,6 +237,51 @@ XID clientErrorValue;   /* XXX this is a kludge */
 
 #define SAME_SCREENS(a, b) (\
     (a.pScreen == b.pScreen))
+
+
+/*
+ * Call SetInputFocus on behalf of WM.
+ */
+void nxwinWMSetInputFocus()
+{
+
+#ifdef NXWIN_MULTIWINDOW
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+  if(nxwinMultiwindow)
+       ErrorF("Dispatch: lock before SetInputFocus\n");
+  else
+       ErrorF("Dispatch: before SetInputFocus\n");
+#endif
+  if(nxwinMultiwindow && pthread_mutex_lock(&nxwinMultiwindowMutex))
+       ErrorF("Dispatch: pthread_mutex_lock() before SetInputFocus failed\n");
+#endif
+
+  if (nxwinSetInputFocusFlag == 1)
+  {
+
+    SetInputFocus(clients[nxwinSetInputFocusClient],
+                      winGetinputInfokeyboard(),
+                          nxwinSetInputFocusFocus,
+                              RevertToPointerRoot,
+                                  CurrentTime, False);
+
+    nxwinSetInputFocusFlag = 0;
+  }
+
+#ifdef NXWIN_MULTIWINDOW
+#ifdef NXWIN_MULTIWINDOW_DEBUG
+   if(nxwinMultiwindow)
+        ErrorF("Dispatch: unlock after SetInputFocus\n");
+   else
+        ErrorF("Dispatch: after SetInputFocus\n");
+#endif
+   if(nxwinMultiwindow && pthread_mutex_unlock(&nxwinMultiwindowMutex))
+        ErrorF("Dispatch: pthread_mutex_unlock() after SetInputFocus failed\n");
+#endif
+
+  return;
+}
+
 
 void
 SetInputCheck(c0, c1)
@@ -470,6 +520,8 @@ Dispatch()
 	    ProcessInputEvents();
 	    FlushIfCriticalOutputPending();
 	}
+
+        nxwinWMSetInputFocus();
 
 	nready = WaitForSomething(clientReady);
 	

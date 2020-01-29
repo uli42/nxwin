@@ -30,7 +30,7 @@ from The Open Group.
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
+/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -39,7 +39,7 @@ from The Open Group.
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
+/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -74,6 +74,7 @@ HINSTANCE	g_hInstance = 0;
 HWND		g_hDlgDepthChange = NULL;
 Bool		g_fCalledSetLocale = FALSE;
 Bool            disable_nomachineLogo = FALSE;
+Bool            g_fKeyboardHookLL = TRUE;
 #ifdef NXWIN_MULTIWINDOW
 Bool            nxwinMultiwindow = FALSE;
 pthread_mutex_t nxwinMultiwindowMutex;
@@ -490,6 +491,10 @@ ddxUseMsg (void)
 
   ErrorF ("-keyboard\n"
 	  "\tSpecify a keyboard device from the configuration file.\n");
+
+  ErrorF ("-[no]keyhook\n"
+          "\tGrab special windows key combinations like Alt-Tab or the Print"
+          "\n\tkey. These keys are enabled by default.\n");
 }
 
 
@@ -1333,6 +1338,24 @@ if(strcmp (argv[i], "-hide") == 0)
     {
       CHECK_ARGS (1);
       g_cmdline.keyboard = argv[++i];
+      return 2;
+    }
+
+  /*
+   * Look for the '-keyhook' argument
+   */
+  if (IS_OPTION ("-keyhook"))
+    {
+      g_fKeyboardHookLL = TRUE;
+      return 2;
+    }
+
+  /*
+   * Look for the '-nokeyhook' argument
+   */
+  if (IS_OPTION ("-nokeyhook"))
+    {
+      g_fKeyboardHookLL = FALSE;
       return 2;
     }
 
