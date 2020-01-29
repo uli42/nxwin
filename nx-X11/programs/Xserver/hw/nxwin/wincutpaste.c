@@ -94,6 +94,7 @@ Atom            clientCLIPBOARD;
 
 Bool            windowsOwner = FALSE;
 Bool            clientOwner  = FALSE;
+ClientPtr       lastOwnerClientPtr;
 
 extern int GetWindowProperty(WindowPtr, Atom, long, long, 
 		Bool, Atom, Atom*, int*, unsigned long*, unsigned long*, unsigned char**);
@@ -157,11 +158,16 @@ void nxwinSetSelectionOwner(Selection *pSelection)
    ErrorF("SetSelectionOwner\n");
 #endif
 
+   lastOwnerWindowPtr = pSelection->pWin;
+   lastOwnerWindow    = pSelection->window;
+   lastOwnerClientPtr = pSelection->client;
+/*
     if (pSelection->selection == XA_PRIMARY)
     {
        xEvent x;
 
        lastOwnerWindowPtr = pSelection->pWin;
+       lastOwnerWindow    = pSelection->window;
 
        x.u.u.type = SelectionRequest;
        x.u.selectionRequest.time = GetTimeInMillis();
@@ -172,13 +178,15 @@ void nxwinSetSelectionOwner(Selection *pSelection)
        x.u.selectionRequest.property = clientCutProperty;
 
        (void) TryClientEvents (pSelection->client, &x, 1,
-                                NoEventMask, NoEventMask /* CantBeFiltered */,
+                                NoEventMask, NoEventMask ,
                                 NullGrab);
 #ifdef NXWIN_CLIPBOARD_DEBUG
        ErrorF("SetSelectionOwner XA_PRIMARY \n");
 #endif
-/*       windowsOwner = FALSE;   */
+
+       windowsOwner = FALSE;   
      }
+*/
 }
 
 
@@ -468,11 +476,35 @@ Bool nxwinSendNotify(xEvent* x)
         if ((iReturn == Success) && (ulReturnItems > 0))
         {
           nxwinSetWindowClipboard(pszReturnData, ulReturnItems);
+
           clientOwner = TRUE;
           nxwinClearSelection();
+
           return TRUE;
         }
      }
   }
   return FALSE;
 }
+
+void nxwinLostFocus(void)
+{
+   if (lastOwnerWindowPtr)
+   {
+      xEvent x;
+
+      x.u.u.type = SelectionRequest;
+      x.u.selectionRequest.time = GetTimeInMillis();
+      x.u.selectionRequest.owner = lastOwnerWindow;
+      x.u.selectionRequest.requestor = WindowTable[0]->drawable.id;
+      x.u.selectionRequest.selection = XA_PRIMARY;
+      x.u.selectionRequest.target = XA_STRING;
+      x.u.selectionRequest.property = clientCutProperty;
+
+      (void) TryClientEvents (lastOwnerClientPtr, &x, 1,
+                               NoEventMask, NoEventMask /* CantBeFiltered */,
+                               NullGrab);
+   }
+}
+
+

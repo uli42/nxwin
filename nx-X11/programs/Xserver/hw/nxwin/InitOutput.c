@@ -129,6 +129,8 @@ Bool nxwinIconicMode = FALSE;
 #endif
 
 char nxwinWinName[80];
+char nxwinMsg[300];
+
 Bool nxwinHideStart = FALSE;
 
 const int NUMFORMATS = sizeof (g_PixmapFormats) / sizeof (g_PixmapFormats[0]);
@@ -611,8 +613,14 @@ if(strcmp (argv[i], "-name") == 0)
                    return 2;
                  }
                  return 0;
-          }
+          
+           }
 
+if(strcmp(argv[i],"-tilemsgb") == 0)
+{
+     strncpy(nxwinMsg,argv[++i],300);
+       return 2; 
+}
 if(strcmp (argv[i], "-hide") == 0)
           {
              nxwinHideStart = TRUE;

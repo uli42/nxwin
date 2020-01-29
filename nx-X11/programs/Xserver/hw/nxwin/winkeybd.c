@@ -384,7 +384,7 @@ winKeybdProc (DeviceIntPtr pDeviceInt, int iState)
       winGetKeyMappings (&keySyms, modMap);
 
 #ifdef XKB
-      /* FIXME: Maybe we should use winGetKbdLeds () here? */
+      // FIXME: Maybe we should use winGetKbdLeds () here? 
       defaultKeyboardControl.leds = g_winInfo.keyboard.leds;
 #else
       defaultKeyboardControl.leds = g_winInfo.keyboard.leds;
@@ -416,7 +416,8 @@ winKeybdProc (DeviceIntPtr pDeviceInt, int iState)
 	  else 
 	    {
 	      
-	      names.keymap = g_winInfo.xkb.keymap;
+	      ErrorF("names.keymap=%s",g_winInfo.xkb.keymap); 
+              names.keymap = g_winInfo.xkb.keymap;
 	      names.keycodes = g_winInfo.xkb.keycodes;
 	      names.types = g_winInfo.xkb.types;
 	      names.compat = g_winInfo.xkb.compat;
@@ -437,6 +438,7 @@ winKeybdProc (DeviceIntPtr pDeviceInt, int iState)
 				       modMap, winKeybdBell, winKeybdCtrl);
 	}
 #endif
+
       break;
     case DEVICE_ON: 
       pDevice->on = TRUE;
@@ -477,12 +479,12 @@ winInitializeModeKeyStates (void)
     }
 
    /* Restore CapsLock */
-  if (GetKeyState (VK_CAPITAL) & 0x0001)
+ /* if (GetKeyState (VK_CAPITAL) & 0x0001)
     {
       keybd_event(VK_CAPITAL, 0, 0 ,0);
       keybd_event(VK_CAPITAL, 0, KEYEVENTF_KEYUP,0);
     }
-
+ */
  
   /* Restore CapsLock */
   if (GetKeyState (VK_CAPITAL) & 0x0001)

@@ -548,7 +548,12 @@ MakeRootTile(pWin)
    nomachineLogo(pGC, pWin);
 #endif
    FreeScratchGC(pGC);
-
+   /*
+    * Setting NX_SPLASH
+    * in order to let clients know
+    * that we drew nomachine logo.
+    */
+   MakeAtom("NX_SPLASH", 9, TRUE);
 }
 
 WindowPtr

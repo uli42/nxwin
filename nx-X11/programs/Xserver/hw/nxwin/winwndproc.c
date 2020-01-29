@@ -51,7 +51,7 @@
 /**************************************************************************/
 
 #include "win.h"
-
+#include <stdlib.h>
 /*
 #include <commctrl.h>
 */
@@ -61,6 +61,11 @@ extern Bool nxagentWas;
 extern UINT valPingPong;
 extern UINT valConnected;
 extern UINT valNxMessage;
+extern UINT storedProxyPid;
+extern UINT isProxyRunning;
+extern UINT setDisplay;
+extern char nxDisplay[300];
+extern unsigned int currentProxyPid;
 static HWND     hwndLastPrivates = NULL;
 void showNXWin();
 #endif
@@ -76,6 +81,7 @@ extern DWORD dwProcessId[10];
 Bool killProcess();
 void nClientsTimer();
 extern int nClients;
+extern char nxwinMsg[300];
 #endif
 
 #ifdef ALLOC_CONSOLE_DEBUG
@@ -159,18 +165,38 @@ if(message == valKillESD)
    #endif
    return 1;
   }
+  
+  if(message == storedProxyPid)
+  {
+    currentProxyPid = (unsigned int)lParam;
+    return 1;
+  }
 
-if(message == valNxMessage)
+ if(message == isProxyRunning)
+  {
+    int mode = (int)wParam;
+    if(mode == 1)
+     return (kill(currentProxyPid,SIGTERM) != -1);
+    else if(mode == 0)
+     return (kill(currentProxyPid,SIGCONT)!= -1);  
+  } 
+ if(message == setDisplay)
+ {
+   sprintf(nxDisplay , "%d",(unsigned int)lParam); 
+   
+   
+   return 1; 
+
+ }  
+
+ if(message == valNxMessage)
  {
    //get signal
    int sig = (int)wParam;
+   
    //get proxy pid
    unsigned int proxyPid = (unsigned int)lParam;
- /*
-   char str[80];
-   sprintf(str,"lparam = [%08lX] pid = %ld sig= %ld", lParam, proxyPid,sig);
-   MessageBox(NULL,str,"TESTPID",MB_OK);
-*/
+   
    return (kill(proxyPid , sig)!= -1);
  }
 #endif
@@ -977,6 +1003,9 @@ if(message == valNxMessage)
 
       /* Release any pressed keys */
       winKeybdReleaseKeys ();
+      
+     extern  void nxwinLostFocus(); 
+      nxwinLostFocus();
       return 0;
 
 #if WIN_NEW_KEYBOARD_SUPPORT
@@ -1175,11 +1204,20 @@ if(message == valNxMessage)
      char title[200]={"NX - "};
      char appTitle[200];
      extern int nClients;
+     char seps[]= ":"; 
+     char textMsg[500]; 
+     memset(textMsg , '\0',sizeof(textMsg)); 
+     char display[100];  
+     int x,y;
+
      if (nClients > 0)
      {
         ShowCursor (TRUE);
-        GetWindowText(hwnd , appTitle , 200 );
-        strcat(title , appTitle);
+        //GetWindowText(hwnd , appTitle , 200 );
+
+        strcat(title , nxwinMsg);
+        strcat(title , nxDisplay);
+
         if(IDCANCEL == MessageBox(hwnd, "Do you really want to close the session?",
            title, MB_OKCANCEL|MB_ICONQUESTION|MB_DEFBUTTON1|MB_TOPMOST))
         {
@@ -1244,6 +1282,7 @@ Bool killProcess()
        wDebug("Error Cannot terminate the process");
       #endif
      }
+    CloseHandle(hProcess); 
    }
    else
     break;
@@ -1266,9 +1305,9 @@ void nClientsTimer()
 #if defined(NXWIN_PONG) || defined(NXWIN_EXIT)
 void showNXWin()
 {
-  ErrorF("showNXWin: Sending message WM_SHOWWINDOW: returned %d\n", 
+ // ErrorF("showNXWin: Sending message WM_SHOWWINDOW: returned %d\n", 
 //	 PostMessage(hwndLastPrivates, WM_SHOWWINDOW, 1L, SW_OTHERUNZOOM));
-	 PostMessage(hwndLastPrivates, WM_NXSHOW, 0L, 0L));
+	 PostMessage(hwndLastPrivates, WM_NXSHOW, 0L, 0L);
 }
 #endif
 

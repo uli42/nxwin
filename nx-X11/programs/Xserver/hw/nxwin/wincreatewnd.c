@@ -67,125 +67,6 @@ extern Bool nxwinIconicMode;
 
 extern char nxwinWinName[80];
 extern Bool nxwinHideStart;
-extern char * defaultFontPath;
-extern int SetDefaultFontPath(char * );
-
-Bool GetRegistryKey(char * outvalue , const char * key , const char * keyvalue , HKEY hCurrKey)
-{
-  HKEY hKey;
-  LONG lResult = 0;
-  DWORD dwType = REG_SZ;
-  DWORD dwSize = 80;
-  char value[dwSize];
-  Bool result = FALSE;
-
-  if( RegOpenKeyEx( hCurrKey,key,0,KEY_READ,&hKey) == ERROR_SUCCESS)
-  {
-    lResult = RegQueryValueEx( hKey,keyvalue,0,&dwType,(LPBYTE)value,&dwSize);
-    if( lResult == ERROR_SUCCESS )
-    {
-      strcpy(outvalue , "/mnt/NX/fonts");
-      result = TRUE;
-    }
-     //close the keys
-     RegCloseKey(hKey);
-     RegCloseKey(hCurrKey);
-  }
- return result;
-}
-
-char * GetFontPaths(char * dirname)
-{
-  struct stat buf;
-  int exists;
-  DIR *d;
-  struct dirent *de;
-  char * fullPath;
-  char * retValue = NULL;
-  char * tmpFontPath = NULL;
-  unsigned int totalRetValueSize = 0;
-  d = opendir(dirname);
-  if (d == NULL)
-  {
-   retValue = NULL;
-  }
-  else
-  {
-    for(de = readdir(d); de != NULL; de = readdir(d))
-    {
-     if(strcmp(de ->d_name , ".") == 0 ||
-        strcmp(de ->d_name , "..") == 0 )
-      continue;
-
-     fullPath = (char *)malloc(strlen(dirname) + 2 + strlen(de ->d_name) + 1);
-     memset(fullPath , 0 , strlen(dirname) + 2 + strlen(de ->d_name) + 1);
-
-     totalRetValueSize += (strlen(dirname) + 2 + strlen(de ->d_name) + 1);
-
-     strcat(fullPath , dirname);
-     strcat(fullPath , "/");
-     strcat(fullPath , de ->d_name);
-     exists = stat(fullPath, &buf);
-     if (exists < 0)
-     {
-      retValue = NULL;
-     }
-     else
-     {
-       if(S_ISDIR(buf.st_mode))
-       {
-        if(!retValue)
-        {
-          retValue = (char *)malloc(totalRetValueSize);
-          strcpy(retValue , fullPath);
-        }
-        else
-        {
-          //copy the new string in a temporary string.
-          tmpFontPath = (char * )malloc(totalRetValueSize);
-          strcpy(tmpFontPath,retValue);
-
-          //realloc new space for character ','
-          retValue = (char *)realloc(retValue , totalRetValueSize + 2);
-          memset(retValue , 0 , totalRetValueSize + 2);
-          strcat(retValue , tmpFontPath);
-          strcat(retValue , ",");
-          strcat(retValue , fullPath);
-          free(tmpFontPath);
-        }
-       }
-       else
-       {
-       }
-     }
-    free(fullPath);
-   }
-  }
- return retValue;
-}
-
-Bool SetNXFontPath(void)
-{
-  char * NXfont;
-  char  fontPath[80];
-  char * NewFontPath;
-  if( !GetRegistryKey(fontPath ,"Software\\Cygnus Solutions\\Cygwin\\mounts v2\\/mnt/NX/fonts","native", HKEY_LOCAL_MACHINE))
-     return FALSE;
-
-  NXfont = GetFontPaths(fontPath);
-  if (!NXfont)
-    return FALSE;
-
-  NewFontPath = (char *)malloc(strlen(defaultFontPath) + strlen(NXfont) + 2);
-  strcpy(NewFontPath , defaultFontPath);
-  strcat(NewFontPath ,",");
-  strcat(NewFontPath ,NXfont);
-  defaultFontPath = NewFontPath;
-  SetDefaultFontPath(NewFontPath);
-  free(NXfont);
-  return TRUE;
-}
-
 /*
  * Create a full screen window
  */
@@ -230,8 +111,7 @@ winCreateBoundingWindowFullScreen (ScreenPtr pScreen)
 	  pScreenInfo->dwUserWidth, pScreenInfo->dwUserHeight);
   ErrorF ("winCreateBoundingWindowFullscreen - Current w: %d h: %d\n",
 	  pScreenInfo->dwWidth, pScreenInfo->dwHeight);
-  SetNXFontPath();
-
+  
   /* Setup our window class */
   wc.style = CS_HREDRAW | CS_VREDRAW;
   wc.lpfnWndProc = winWindowProc;
@@ -289,7 +169,6 @@ winCreateBoundingWindowFullScreen (ScreenPtr pScreen)
   if( !nxwinHideStart )
       BringWindowToTop (*phwnd);
 
-
   return TRUE;
 }
 
@@ -332,8 +211,7 @@ winCreateBoundingWindowWindowed (ScreenPtr pScreen)
 
 #endif
 
-  SetNXFontPath();
-
+  
 
   ErrorF ("winCreateBoundingWindowWindowed - User w: %d h: %d\n",
 	  pScreenInfo->dwUserWidth, pScreenInfo->dwUserHeight);

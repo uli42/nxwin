@@ -864,8 +864,13 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
 			       ptMouse.y - s_pScreenInfo->dwYOffset,
 			       g_c32LastInputEventTime = GetTickCount ());
       return 0;
-
-    case WM_NCMOUSEMOVE:
+     case WM_KILLFOCUS:
+     {
+       extern  void nxwinLostFocus();
+       nxwinLostFocus();
+       return 0;
+     } 
+     case WM_NCMOUSEMOVE:
       /*
        * We break instead of returning 0 since we need to call
        * DefWindowProc to get the mouse cursor changes

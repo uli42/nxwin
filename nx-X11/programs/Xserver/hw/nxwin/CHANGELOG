@@ -1,0 +1,23 @@
+ChangeLog:
+
+nxwin-1.3.1-4
+
+- Corrected typos in the ChangeLog.
+
+nxwin-1.3.1-3
+
+- Fixed the compilation problems encountered by users on
+  machines where the X11 includes were not already inst-
+  alled.
+
+nxwin-1.3.1-2
+
+- The background of the root window is reset to full black
+  at the time the first window is mapped on the X server.
+
+- Fixed the wrong root path in tar archive. Reason is that
+  archive was not produced by running nxscripts/tar-nxwin.
+
+nxwin-1.3.1-1
+
+- Opened the 1.3.1 branch.

@@ -881,6 +881,8 @@ ProcConfigureWindow(client)
     register ClientPtr client;
 {
     register WindowPtr pWin;
+    register WindowPtr pParent;
+    extern int nxagent_black;
     REQUEST(xConfigureWindowReq);
     register int result;
     int len;
@@ -888,6 +890,8 @@ ProcConfigureWindow(client)
     REQUEST_AT_LEAST_SIZE(xConfigureWindowReq);
     pWin = (WindowPtr)SecurityLookupWindow( stuff->window, client,
 					    SecurityWriteAccess);
+     pParent=pWin->parent;
+    
     if (!pWin)
 	    return(BadWindow);
     len = client->req_len - (sizeof(xConfigureWindowReq) >> 2);
@@ -901,6 +905,15 @@ ProcConfigureWindow(client)
 		    stuff[1].window,
 		    stuff[1].mask);
 #endif
+
+    if(!pParent->parent)
+    {
+ 	   pParent->backgroundState = BackgroundPixel;
+           pParent->background.pixel = nxagent_black;
+           (*(pParent->drawable.pScreen)->ChangeWindowAttributes)(pParent,CWBackPixel|CWBorderPixel|CWCursor|CWBackingStore);
+           (*(pParent->drawable.pScreen)->ClearToBackground)(pParent, 0, 0, pParent->drawable.width, pParent->drawable.height, 0);
+    }
+    
     result =  ConfigureWindow(pWin, (Mask)stuff->mask, (XID *) &stuff[1], 
 			      client);
     if (client->noClientException != Success)
