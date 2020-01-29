@@ -34,7 +34,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -43,7 +43,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -335,33 +335,10 @@ winAllocateFBShadowDDNL (ScreenPtr pScreen)
 	}
 
       /* Only change the video mode when different than current mode */
-      if (!pScreenInfo->fMultipleMonitors
-	  && (pScreenInfo->dwWidth != GetSystemMetrics (SM_CXSCREEN)
-	      || pScreenInfo->dwHeight != GetSystemMetrics (SM_CYSCREEN)
-	      || pScreenInfo->dwBPP != GetDeviceCaps (hdc, BITSPIXEL)
-	      || pScreenInfo->dwRefreshRate != 0))
-	{
-	  ErrorF ("winAllocateFBShadowDDNL - Changing video mode\n");
-
-	  /* Change the video mode to the mode requested */
-	  ddrval = IDirectDraw4_SetDisplayMode (pScreenPriv->pdd4,
-						pScreenInfo->dwWidth,
-						pScreenInfo->dwHeight,
-						pScreenInfo->dwBPP,
-						pScreenInfo->dwRefreshRate,
-						0);	       
-	  if (FAILED (ddrval))
-	    {
-	      ErrorF ("winAllocateFBShadowDDNL - Could not set "
-		      "full screen display mode: %08x\n",
-		      ddrval);
-	      return FALSE;
-	    }
-	}
-      else
-	{
-	  ErrorF ("winAllocateFBShadowDDNL - Not changing video mode\n");
-	}
+      /*
+       * XXX: Removed. This created problems when working on multiple
+       *       monitors.
+       */
 
       /* Release our DC */
       ReleaseDC (NULL, hdc);

@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -44,7 +44,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -376,6 +376,10 @@ typedef struct
   DWORD			dwWidth_mm;
   DWORD			dwHeight_mm;
   DWORD			dwPaddedWidth;
+
+  DWORD			dwInitialX;
+  DWORD			dwInitialY;
+  HMONITOR		hMonitor;
 
   /*
    * dwStride is the number of whole pixels that occupy a scanline,
@@ -1441,6 +1445,11 @@ void
 winSetShapeMultiWindow (WindowPtr pWindow);
 #endif
 
+void
+winUpdateWindowName(WindowPtr pWin);
+
+void
+winGetWindowName(void *pWin, char **ppName);
 
 /*
  * winwndproc.c

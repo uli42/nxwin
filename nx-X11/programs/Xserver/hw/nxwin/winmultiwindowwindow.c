@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -40,7 +40,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -928,8 +928,12 @@ winTopLevelWindowProc (HWND hwnd, UINT message,
       /* Has the mouse pointer crossed screens? */
       if (s_pScreen != miPointerCurrentScreen ())
 	miPointerSetNewScreen (s_pScreenInfo->dwScreen,
-			       ptMouse.x - s_pScreenInfo->dwXOffset,
-			       ptMouse.y - s_pScreenInfo->dwYOffset);
+			       ptMouse.x -
+			       GetSystemMetrics(SM_XVIRTUALSCREEN) -
+			       s_pScreenInfo->dwXOffset,
+			       ptMouse.y -
+			       GetSystemMetrics(SM_YVIRTUALSCREEN) -
+			       s_pScreenInfo->dwYOffset);
 
       /* Are we tracking yet? */
       if (!s_fTracking)
@@ -979,8 +983,11 @@ FIXME
         }
 */
       /* Deliver absolute cursor position to X Server */
-      miPointerAbsoluteCursor (ptMouse.x - s_pScreenInfo->dwXOffset,
-			       ptMouse.y - s_pScreenInfo->dwYOffset,
+
+      miPointerAbsoluteCursor (ptMouse.x - GetSystemMetrics(SM_XVIRTUALSCREEN) -
+			       s_pScreenInfo->dwXOffset,
+			       ptMouse.y - GetSystemMetrics(SM_YVIRTUALSCREEN) -
+			       s_pScreenInfo->dwYOffset,
 			       g_c32LastInputEventTime = GetTickCount ());
       return 0;
      case WM_KILLFOCUS:
@@ -1565,7 +1572,8 @@ FIXME
 	  GetCursorPos (&point);
 
 	  /* Deliver absolute cursor position to X Server */
-	  miPointerAbsoluteCursor (point.x, point.y,
+	  miPointerAbsoluteCursor (point.x - GetSystemMetrics(SM_XVIRTUALSCREEN),
+				   point.y - GetSystemMetrics(SM_YVIRTUALSCREEN),
 				   g_c32LastInputEventTime = GetTickCount ());
 	}
       else
@@ -1640,8 +1648,8 @@ winCreateWindowsWindow (WindowPtr pWin)
 
   iBorder = wBorderWidth (pWin);
 
-  iX = pWin->drawable.x;
-  iY = pWin->drawable.y;
+  iX = pWin->drawable.x + GetSystemMetrics(SM_XVIRTUALSCREEN);
+  iY = pWin->drawable.y + GetSystemMetrics(SM_YVIRTUALSCREEN);
 
   iWidth = pWin->drawable.width;
   iHeight = pWin->drawable.height;
@@ -2278,3 +2286,22 @@ privLoadIcon(WindowPtr pWin)
      return hIcon;
 }
 	
+
+void
+winUpdateWindowName(WindowPtr pWin)
+{
+  char *name;
+  winWindowPriv(pWin);
+
+  if (pWinPriv->hWnd != NULL)
+  {
+    winGetWindowName(pWin, &name);
+
+    if (name != NULL)
+    {
+      SetWindowText(pWinPriv->hWnd, name);
+
+      free(name);
+    }
+  }
+}

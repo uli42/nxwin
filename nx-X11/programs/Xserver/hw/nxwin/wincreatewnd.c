@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -40,7 +40,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -81,6 +81,8 @@ winCreateBoundingWindowFullScreen (ScreenPtr pScreen)
   HWND			*phwnd = &pScreenPriv->hwndScreen;
   WNDCLASS		wc;
 
+  int                   xOrg = pScreenInfo->dwInitialX;
+  int                   yOrg = pScreenInfo->dwInitialY;
 
 #ifdef NXWIN_LOGO
   HANDLE nxIcon;
@@ -139,8 +141,8 @@ winCreateBoundingWindowFullScreen (ScreenPtr pScreen)
                                | (nxwinIconicMode?WS_ICONIC:0)
 #endif
                                ,
-			    0,			/* Horizontal position */
-			    0,			/* Vertical position */
+			    xOrg,		/* Horizontal position */
+			    yOrg,		/* Vertical position */
 			    iWidth,		/* Right edge */
 			    iHeight,		/* Bottom edge */
 			    (HWND) NULL,	/* No parent or owner window */
@@ -502,6 +504,21 @@ winGetWorkArea (RECT *prcWorkArea, winScreenInfo *pScreenInfo)
   int			iWidth, iHeight;
   int			iLeft, iTop;
   int			iPrimaryNonWorkAreaWidth, iPrimaryNonWorkAreaHeight;
+
+  if (!pScreenInfo->fMultipleMonitors && pScreenInfo->hMonitor)
+  {
+    MONITORINFO mi;
+
+    ZeroMemory(&mi, sizeof(MONITORINFO));
+    mi.cbSize = sizeof(MONITORINFO);
+
+    if (GetMonitorInfo(pScreenInfo->hMonitor, &mi))
+    {
+      memcpy(prcWorkArea, &mi.rcWork, sizeof(RECT));
+
+      return TRUE;
+    }
+  }
 
   /* SPI_GETWORKAREA only gets the work area of the primary screen. */
   SystemParametersInfo (SPI_GETWORKAREA, 0, prcWorkArea, 0);

@@ -1,5 +1,45 @@
 ChangeLog:
 
+nxwin-3.4.0-2
+
+- Fixed TR05F02062. Catched changes of WM_NAME property in order to
+  keep the window title bar updated.
+
+nxwin-3.4.0-1
+
+- Opened the 3.4.0 branch based on nxwin-3.3.0-4.
+
+- Updated copyright to year 2009.
+
+nxwin-3.3.0-4
+
+- Translated the coordinates of mouse motions to make them relative to
+  the origin of the virtual screen rectangle.
+
+nxwin-3.3.0-3
+
+- If the full screen window is required to spread over all monitors
+  then settle the left high corner of the window in the origin of the
+  virtual screen.
+ 
+- When the window is moved, update the monitor data stored in the
+  screen info structure.
+
+- Centering the window in the right monitor. 
+
+- Opening the window on the monitor which cursor is located in.
+
+- Removed the change of display setting when using DirectDraw.
+
+- Fixed TR07D01419. Adjusting the size on the base of work area of mo-
+  nitor in use.
+
+- Moved creation of bounding window after adjustments for multiple
+  monitors.
+
+- Fixed TR12F02136. Always PRIMARY selection was requested, regardless
+  of the actual selection set by the client.
+
 nxwin-3.3.0-2
 
 - Fixed TR06D01394. The cursor was drawn inside the NX window. Cursor

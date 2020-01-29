@@ -30,7 +30,7 @@ from The Open Group.
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -39,7 +39,7 @@ from The Open Group.
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -1348,7 +1348,7 @@ if(strcmp (argv[i], "-hide") == 0)
   if (IS_OPTION ("-keyhook"))
     {
       g_fKeyboardHookLL = TRUE;
-      return 2;
+      return 1;
     }
 
   /*
@@ -1357,7 +1357,7 @@ if(strcmp (argv[i], "-hide") == 0)
   if (IS_OPTION ("-nokeyhook"))
     {
       g_fKeyboardHookLL = FALSE;
-      return 2;
+      return 1;
     }
 
   return 0;

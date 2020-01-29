@@ -31,7 +31,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -40,7 +40,7 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
@@ -85,6 +85,8 @@ static Bool     nxwinSelection = FALSE;
 extern Bool     nxwinMultiwindow;
 
 extern int      nxwinUpdateClipboard;
+
+Atom            nxwinLastSelection = 0;
 
 int             nxwinClipboardStatus;
 
@@ -187,6 +189,7 @@ void nxwinSetSelectionOwner(Selection *pSelection)
    }
 
    nxwinUpdateClipboard = 1;
+   nxwinLastSelection = pSelection->selection;
 /*
     if (pSelection->selection == XA_PRIMARY)
     {
@@ -568,7 +571,7 @@ void nxwinRequestSelection(void)
     x.u.selectionRequest.time = GetTimeInMillis();
     x.u.selectionRequest.owner = lastOwnerWindow;
     x.u.selectionRequest.requestor = WindowTable[0]->drawable.id;
-    x.u.selectionRequest.selection = XA_PRIMARY;
+    x.u.selectionRequest.selection = nxwinLastSelection;
     x.u.selectionRequest.target = XA_STRING;
     x.u.selectionRequest.property = clientCutProperty;
 

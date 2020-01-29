@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -44,14 +44,15 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
 /**************************************************************************/
 
-#include "win.h"
+#define WINVER 0x0501
 
+#include "win.h"
 
 #ifdef NXWIN_LOGO
   int nxagent_depth;
@@ -187,17 +188,6 @@ winScreenInit (int index,
       pScreenInfo->fMultipleMonitors = FALSE;
     }
 
-  /* Create display window */
-  if (!(*pScreenPriv->pwinCreateBoundingWindow) (pScreen))
-    {
-      ErrorF ("winScreenInit - pwinCreateBoundingWindow () "
-	      "failed\n");
-      return FALSE;
-    }
-
-  fprintf(stderr, "Info: Display running with pid '%lu' and handler '0x%lx'.\n",
-              (long unsigned) getpid(), (long unsigned) pScreenPriv-> hwndScreen);
-
   /* Get a device context */
   hdc = GetDC (pScreenPriv->hwndScreen);
 
@@ -214,6 +204,8 @@ winScreenInit (int index,
        */
       if (!pScreenInfo->fUserGaveHeightAndWidth)
 	{
+	  pScreenInfo->dwInitialX = GetSystemMetrics (SM_XVIRTUALSCREEN);
+	  pScreenInfo->dwInitialY = GetSystemMetrics (SM_YVIRTUALSCREEN);
 	  pScreenInfo->dwWidth = GetSystemMetrics (SM_CXVIRTUALSCREEN);
 	  pScreenInfo->dwHeight = GetSystemMetrics (SM_CYVIRTUALSCREEN);
 	  pScreenInfo->dwWidth_mm = (pScreenInfo->dwWidth /
@@ -227,6 +219,56 @@ winScreenInit (int index,
       pScreenPriv->dwLastWindowsWidth = GetSystemMetrics (SM_CXSCREEN);
       pScreenPriv->dwLastWindowsHeight = GetSystemMetrics (SM_CYSCREEN);
     }
+
+  /*
+   * Get current screen info.
+   */
+
+  if (!pScreenInfo->fMultipleMonitors)
+  {
+    POINT point;
+    HMONITOR hMonitor;
+    MONITORINFO mi;
+
+    if (GetCursorPos(&point) != 0)
+    {
+      hMonitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
+
+      if (hMonitor != NULL)
+      {
+        ZeroMemory(&mi, sizeof(MONITORINFO));
+
+        mi.cbSize = sizeof(MONITORINFO);
+
+        if (GetMonitorInfo(hMonitor, &mi) != 0)
+        {
+          pScreenInfo -> dwInitialX = mi.rcMonitor.left;
+          pScreenInfo -> dwInitialY = mi.rcMonitor.top;
+
+          pScreenInfo->dwWidth = mi.rcMonitor.right - mi.rcMonitor.left;
+          pScreenInfo->dwHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
+          pScreenInfo->dwWidth_mm = (pScreenInfo->dwWidth /
+                                        WIN_DEFAULT_DPI) * 25.4;
+          pScreenInfo->dwHeight_mm = (pScreenInfo->dwHeight /
+                                         WIN_DEFAULT_DPI) * 25.4;
+
+          pScreenInfo->hMonitor = hMonitor;
+        }
+      }
+    }
+  }
+
+  /* Create display window */
+  if (!(*pScreenPriv->pwinCreateBoundingWindow) (pScreen))
+    {
+      ErrorF ("winScreenInit - pwinCreateBoundingWindow () "
+	      "failed\n");
+      return FALSE;
+    }
+
+  fprintf(stderr, "Info: Display running with pid '%lu' and handler '0x%lx'.\n",
+              (long unsigned) getpid(), (long unsigned) pScreenPriv ->
+                  hwndScreen);
 
   /* Save the original bits per pixel */
   pScreenPriv->dwLastWindowsBitsPixel = GetDeviceCaps (hdc, BITSPIXEL);

@@ -35,7 +35,7 @@
 
 /**************************************************************************/
 /*                                                                        */
-/* Copyright (c) 2001, 2007 NoMachine, http://www.nomachine.com.          */
+/* Copyright (c) 2001, 2009 NoMachine, http://www.nomachine.com.          */
 /*                                                                        */
 /* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
@@ -44,11 +44,13 @@
 /*                                                                        */
 /* Check http://www.nomachine.com/licensing.html for applicability.       */
 /*                                                                        */
-/* NX and NoMachine are trademarks of NoMachine S.r.l.                    */
+/* NX and NoMachine are trademarks of Medialogic S.p.A.                   */
 /*                                                                        */
 /* All rights reserved.                                                   */
 /*                                                                        */
 /**************************************************************************/
+
+#define WINVER 0x0501
 
 #include "win.h"
 #include <stdlib.h>
@@ -293,26 +295,46 @@ if(message == valKillESD)
 #if CYGDEBUG
       ErrorF ("winWindowProc - WM_SHOWWINDOW\n");
 #endif
-      int w,h,Width,Height;
-      RECT rect;
+      MONITORINFO mi;
 
-      GetWindowRect(hwnd , &rect);
+      int wWidth, wHeight;
+      int mWidth, mHeight;
+      RECT wRect;
+      RECT mRect;
 
-      // Calculate the width and height of the NXWin.
-      Width =  rect.right - rect.left;
-      Height = rect.bottom - rect.top;
+      GetWindowRect(hwnd, &wRect);
+
+      /*
+       * Size of the nxwin window.
+       */
+
+      wWidth  = wRect.right - wRect.left;
+      wHeight = wRect.bottom - wRect.top;
+
+      mi.cbSize = sizeof(mi);
+      GetMonitorInfo(s_pScreenInfo -> hMonitor, &mi);
+
+      /*
+       * Can't use the size saved in the
+       * screen info because it doesn't 
+       * report the working area size.
+       */
+
+      mRect = mi.rcWork;
+
+      mWidth  = mRect.right - mRect.left;
+      mHeight = mRect.bottom - mRect.top;
 
       SetForegroundWindow(hwnd);
 
-      w = GetSystemMetrics(SM_CXFULLSCREEN);
-      h = GetSystemMetrics(SM_CYFULLSCREEN);
+      if (wWidth < mWidth && wHeight < mHeight)
+          SetWindowPos(hwnd, NULL, mRect.left + (mWidth - wWidth) / 2,
+                           mRect.top + (mHeight - wHeight) / 2,
+                               0, 0, SWP_NOSIZE);
 
-       if(Width < w && Height<h)
-          SetWindowPos(hwnd , NULL,(w-Width)/2,(h-Height)/2,70,70,SWP_NOSIZE );
-
-      ShowWindow(hwnd , SW_SHOWDEFAULT);
+      ShowWindow(hwnd, SW_SHOWDEFAULT);
       return 0;
-} 
+    } 
 
     case WM_CREATE:
 	{
@@ -611,6 +633,44 @@ if(message == valKillESD)
 	GetScrollInfo (hwnd, SB_VERT, &si);
 	s_pScreenInfo->dwYOffset = -si.nPos;
       }
+      return 0;
+
+    case WM_MOVE:
+#if CYGMULTIWINDOW_DEBUG
+      ErrorF ("winWindowProc - WM_MOVE\n");
+#endif
+
+      /*
+       * Update the monitor informations when the
+       * window is moved.
+       */
+
+      if (!s_pScreenInfo->fMultipleMonitors)
+      {
+        HMONITOR hMonitor;
+        MONITORINFO mi;
+
+        hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+
+        if (hMonitor != s_pScreenInfo -> hMonitor)
+        {
+          ZeroMemory(&mi, sizeof(MONITORINFO));
+          mi.cbSize = sizeof(MONITORINFO);
+
+          if (GetMonitorInfo(hMonitor, &mi) != 0)
+          {
+            s_pScreenInfo->dwWidth = mi.rcMonitor.right - mi.rcMonitor.left;
+            s_pScreenInfo->dwHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
+            s_pScreenInfo->dwWidth_mm = (s_pScreenInfo->dwWidth /
+                                          WIN_DEFAULT_DPI) * 25.4;
+            s_pScreenInfo->dwHeight_mm = (s_pScreenInfo->dwHeight /
+                                           WIN_DEFAULT_DPI) * 25.4;
+
+            s_pScreenInfo->hMonitor = hMonitor;
+          }
+        }
+      }
+
       return 0;
 
     case WM_VSCROLL:
