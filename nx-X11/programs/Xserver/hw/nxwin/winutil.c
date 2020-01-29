@@ -2,7 +2,7 @@
 /*                                                                        */
 /* Copyright (c) 2001,2006 NoMachine, http://www.nomachine.com.           */
 /*                                                                        */
-/* NXPROXY, NX protocol compression and NX extensions to this software    */
+/* NXWIN, NX protocol compression and NX extensions to this software      */
 /* are copyright of NoMachine. Redistribution and use of the present      */
 /* software is allowed according to terms specified in the file LICENSE   */
 /* which comes in the source distribution.                                */
